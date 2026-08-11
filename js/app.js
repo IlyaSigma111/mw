@@ -49,7 +49,7 @@ async function init() {
     renderHeader(vk);
     renderSchedule();
     renderTasks(DEFAULT_TASKS_EMPTY);
-    bindPlusOne(myUid);
+    initDock();
 
     if (DEV_MODE) {
       seedDevData(myUid, vk);
@@ -85,10 +85,8 @@ function renderHeader(vk) {
   const avatar = document.getElementById('hdr-avatar');
   const name = document.getElementById('hdr-name');
   if (vk.photo_100) {
-    avatar.src = vk.photo_100;
-    avatar.alt = '';
+    avatar.innerHTML = '<img src="' + escapeHtml(vk.photo_100) + '" alt="">';
   } else {
-    avatar.src = '';
     avatar.textContent = (vk.first_name || '?')[0] + (vk.last_name || '')[0] || '?';
   }
   name.innerHTML = '<span>' + escapeHtml(vk.first_name + ' ' + vk.last_name) + '</span><small>участник слёта</small>';
@@ -269,24 +267,14 @@ async function doTask(task) {
   }
 }
 
-/* ---------- Тестовая кнопка «+1 балл» (в финале можно скрыть) ---------- */
-function bindPlusOne(uid) {
-  document.getElementById('plus-one').addEventListener('click', async () => {
-    try {
-      if (DEV_MODE) {
-        const cur = Number(localStorage.getItem('mw_dev_score') || 0) + 1;
-        localStorage.setItem('mw_dev_score', String(cur));
-        setScore(cur);
-      } else {
-        await db.collection('users').doc(uid).update({
-          score: firebase.firestore.FieldValue.increment(1),
-        });
-      }
-      vkToast('Балл начислен!');
-      showToast('+1 балл');
-    } catch (err) {
-      showToast('Не удалось: ' + err.message, true);
-    }
+/* ---------- Переключение вкладок докбара ---------- */
+function initDock() {
+  document.querySelectorAll('.dock-item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      document.querySelectorAll('.dock-item').forEach((b) => b.classList.toggle('on', b === btn));
+      document.querySelectorAll('.app-pane').forEach((p) => p.classList.toggle('active', p.dataset.tab === tab));
+    });
   });
 }
 

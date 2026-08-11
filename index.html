@@ -29,8 +29,8 @@
       <div class="hdr-score"><span id="score-num">0</span></div>
     </header>
 
-    <!-- Расписание -->
-    <section class="sec rise rise-1">
+    <!-- РАСПИСАНИЕ (открыто по умолчанию) -->
+    <section class="sec tab-pane app-pane rise rise-1 active" data-tab="schedule">
       <div class="sec-head">
         <i data-feather="calendar"></i>
         <h2>Расписание</h2>
@@ -41,8 +41,18 @@
       </div>
     </section>
 
-    <!-- Рейтинг -->
-    <section class="sec rise rise-2">
+    <!-- ЗАДАНИЯ -->
+    <section class="sec tab-pane app-pane rise rise-2" data-tab="tasks">
+      <div class="sec-head">
+        <i data-feather="zap"></i>
+        <h2>Задания</h2>
+      </div>
+      <div class="sec-sub">Выполняй и получай баллы</div>
+      <div id="tasks"></div>
+    </section>
+
+    <!-- РЕЙТИНГ -->
+    <section class="sec tab-pane app-pane rise rise-3" data-tab="rating">
       <div class="sec-head">
         <i data-feather="award"></i>
         <h2>Рейтинг</h2>
@@ -52,20 +62,20 @@
         <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
       </div>
     </section>
-
-    <!-- Задания -->
-    <section class="sec rise rise-3">
-      <div class="sec-head">
-        <i data-feather="zap"></i>
-        <h2>Задания</h2>
-      </div>
-      <div class="sec-sub">Выполняй и получай баллы</div>
-      <div id="tasks"></div>
-    </section>
   </div>
 
-  <!-- Тестовая кнопка +1 балл (в финале можно скрыть) -->
-  <button id="plus-one" class="fab" type="button">+1 балл</button>
+  <!-- Докбар: Расписание · Задания · Рейтинг -->
+  <nav class="dock">
+    <button class="dock-item on" data-tab="schedule" type="button">
+      <i data-feather="calendar"></i><span>Расписание</span>
+    </button>
+    <button class="dock-item" data-tab="tasks" type="button">
+      <i data-feather="zap"></i><span>Задания</span>
+    </button>
+    <button class="dock-item" data-tab="rating" type="button">
+      <i data-feather="award"></i><span>Рейтинг</span>
+    </button>
+  </nav>
 
   <script src="js/firebase-config.js"></script>
   <script src="js/schedule.js"></script>
