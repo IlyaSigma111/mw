@@ -107,17 +107,17 @@ function escapeHtml(s) {
   }[c]));
 }
 
-/* Кнопка «Админ» в шапке: показываем только организаторам (VK ID из config/admins) */
+/* Кнопка «Админ» в докбаре: показываем только организаторам (VK ID из config/admins) */
 async function maybeShowAdminBtn(vk) {
-  const btn = document.getElementById('btn-admin');
+  const btn = document.getElementById('dock-admin');
   if (!btn) return;
-  if (DEV_MODE) { btn.style.display = 'inline-flex'; return; }
+  if (DEV_MODE) { btn.style.display = 'flex'; return; }
   try {
     const snap = await db.collection('config').doc('admins').get();
     const ids = snap.exists && Array.isArray(snap.data().ids)
       ? snap.data().ids.map(String)
       : [];
-    if (ids.includes(String(vk.id))) btn.style.display = 'inline-flex';
+    if (ids.includes(String(vk.id))) btn.style.display = 'flex';
   } catch (err) { /* молчим — кнопка просто не покажется */ }
 }
 
@@ -328,6 +328,10 @@ function initDock() {
   document.querySelectorAll('.dock-item').forEach((btn) => {
     btn.addEventListener('click', () => {
       const tab = btn.dataset.tab;
+      if (tab === 'admin') {
+        location.href = 'admin.html' + location.search;
+        return;
+      }
       document.querySelectorAll('.dock-item').forEach((b) => b.classList.toggle('on', b === btn));
       document.querySelectorAll('.app-pane').forEach((p) => p.classList.toggle('active', p.dataset.tab === tab));
     });
@@ -372,11 +376,5 @@ function renderRating(listOverride) {
 /* ---------- Запуск ---------- */
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sched-refresh').addEventListener('click', refreshSchedule);
-  const adminBtn = document.getElementById('btn-admin');
-  if (adminBtn) {
-    adminBtn.addEventListener('click', () => {
-      location.href = 'admin.html' + location.search;
-    });
-  }
   init();
 });
