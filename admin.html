@@ -30,6 +30,9 @@
 
   <!-- Панель админа -->
   <div id="panel" class="shell" style="display:none">
+    <header class="appbar">
+      <span class="appbar-logo"><i data-feather="activity"></i> МедиаволнApp</span>
+    </header>
     <header class="hdr rise" style="margin-bottom:20px">
       <div id="admin-avatar" class="hdr-avatar">А</div>
       <div class="hdr-name"><span id="admin-name">Администратор</span><small><span class="badge badge-admin">админ</span></small></div>
@@ -45,7 +48,7 @@
 
     <!-- РАСПИСАНИЕ -->
     <div class="tab-pane" data-pane="schedule">
-      <div class="sec-sub">Редактирование трёх дней слёта. Сохраняется в schedule/current — участники увидят после кнопки «Обновить» в приложении.</div>
+      <div class="sec-sub">Укажи дату каждого дня — участники увидят только день с сегодняшней датой. Сохраняется в schedule/current; участники увидят после кнопки «Обновить».</div>
       <div id="sched-edit"></div>
       <button id="btn-save-schedule" class="btn btn-block" type="button" style="margin-top:14px">Сохранить расписание</button>
     </div>

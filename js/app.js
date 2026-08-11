@@ -35,6 +35,9 @@ async function init() {
     if (!DEV_MODE) {
       firebase.initializeApp(FIREBASE_CONFIG);
       db = firebase.firestore();
+      // Long-polling вместо websocket — в iOS WKWebView (VK на iPhone)
+      // websocket-соединение Firestore зависает и realtime не приходит.
+      db.settings({ experimentalForceLongPolling: true });
       auth = firebase.auth();
       await auth.signInAnonymously();
     } else {
@@ -99,9 +102,23 @@ function escapeHtml(s) {
   }[c]));
 }
 
+/* ---------- Realtime с фолбэком ----------
+   onSnapshot — основной источник, но если за firstMs он ничего не прислал
+   (напр. iOS WKWebView глушит long-polling-канал), догружаем get()
+   и опрашиваем каждые 15 секунд, пока подписка молчит. */
+function listenWithFallback(ref, onSnap, onErr, firstMs) {
+  let got = false;
+  const deliver = (snap) => { got = true; onSnap(snap); };
+  const poll = () => ref.get().then(deliver).catch(() => {});
+  ref.onSnapshot(deliver, onErr);
+  setTimeout(() => { if (!got) poll(); }, firstMs || 6000);
+  setInterval(() => { if (!got) poll(); }, 15000);
+}
+
 /* ---------- Баллы в реальном времени ---------- */
 function subscribeScore(uid) {
-  db.collection('users').doc(uid).onSnapshot(
+  listenWithFallback(
+    db.collection('users').doc(uid),
     (snap) => {
       if (snap.exists) {
         const d = snap.data();
@@ -117,13 +134,33 @@ function setScore(n) {
 }
 
 /* ---------- Расписание ---------- */
+/* Сегодняшняя дата в локальном времени (ГГГГ-ММ-ДД) */
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
+}
+
 function renderSchedule() {
   const wrap = document.getElementById('schedule');
   const cached = localStorage.getItem(SCHEDULE_CACHE_KEY);
   const list = cached ? JSON.parse(cached) : DEFAULT_SCHEDULE;
 
+  // Даты ещё не расставлены админом → показываем всё (демо/до настройки).
+  // Иначе показываем ТОЛЬКО день с сегодняшней датой.
+  const anyDate = list.some((d) => d && d.date);
+  const shown = anyDate
+    ? list.filter((d) => d && d.date === todayStr())
+    : list;
+
+  if (!shown.length) {
+    wrap.innerHTML = '<div class="empty">Расписание на сегодня ещё не опубликовано</div>';
+    return;
+  }
+
   wrap.innerHTML = '';
-  list.forEach((day, di) => {
+  shown.forEach((day, di) => {
     const item = document.createElement('div');
     item.className = 'acc' + (di === 0 ? ' open' : '');
     const inner = day.events.map((e) =>
@@ -166,13 +203,14 @@ let lastRatingRender = 0;
 let ratingTimer = null;
 
 function subscribeRating() {
-  db.collection('users')
-    .orderBy('score', 'desc')
-    .limit(10)
-    .onSnapshot((snap) => {
+  listenWithFallback(
+    db.collection('users').orderBy('score', 'desc').limit(10),
+    (snap) => {
       ratingData = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
       throttleRenderRating();
-    }, () => showToast('Рейтинг недоступен', true));
+    },
+    () => showToast('Рейтинг недоступен', true)
+  );
 }
 
 /* Обновление не чаще 5 секунд */
@@ -196,10 +234,9 @@ let seenTasks = new Set();
 let lastTasks = [];
 
 function subscribeTasks(uid) {
-  db.collection('tasks')
-    .where('active', '==', true)
-    .orderBy('createdAt', 'desc')
-    .onSnapshot((snap) => {
+  listenWithFallback(
+    db.collection('tasks').where('active', '==', true).orderBy('createdAt', 'desc'),
+    (snap) => {
       const fresh = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       // Уведомление о новом задании
       fresh.forEach((t) => {
@@ -209,7 +246,9 @@ function subscribeTasks(uid) {
         }
       });
       renderTasks(fresh);
-    }, () => showToast('Задания недоступны', true));
+    },
+    () => showToast('Задания недоступны', true)
+  );
 }
 
 function renderTasks(list) {

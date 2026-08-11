@@ -61,7 +61,21 @@ body {
 .btn:active, .card-press:active { transform: scale(0.97); }
 
 /* ---------- Контейнер ---------- */
-.shell { max-width: 560px; margin: 0 auto; padding: 20px 16px; }
+.shell { max-width: 560px; margin: 0 auto; padding: 0 16px; }
+
+/* ---------- Верхняя панель приложения ----------
+   Выравнивается на уровне шапки VK (крестик / ⋯ справа вверху),
+   отступ под статус-бар iPhone через safe-area. */
+.appbar {
+  display: flex; align-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 6px 16px;
+}
+.appbar-logo {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+  color: var(--muted); text-transform: uppercase;
+}
+.appbar-logo .feather { width: 18px; height: 18px; color: var(--accent); }
 
 /* ---------- Шапка участника ---------- */
 .hdr {

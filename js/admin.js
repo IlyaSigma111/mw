@@ -54,6 +54,8 @@ async function initAdmin() {
     if (!DEV_MODE) {
       firebase.initializeApp(FIREBASE_CONFIG);
       db = firebase.firestore();
+      // Long-polling вместо websocket (iOS WKWebView внутри VK).
+      db.settings({ experimentalForceLongPolling: true });
       auth = firebase.auth();
       await auth.signInAnonymously();
 
@@ -122,6 +124,7 @@ function switchTab(name) {
 function loadScheduleDraft() {
   scheduleDraft = DEFAULT_SCHEDULE.map((d) => ({
     day: d.day,
+    date: d.date || '',
     events: d.events.map((e) => ({ ...e })),
   }));
   renderScheduleEditor();
@@ -136,6 +139,8 @@ function renderScheduleEditor() {
     block.innerHTML =
       '<div class="field"><label>День</label>' +
       '<input class="input" data-day="' + di + '" value="' + escapeHtml(day.day) + '"></div>' +
+      '<div class="field"><label>Дата (день покажется участникам именно в эту дату)</label>' +
+      '<input class="input" type="date" data-date="' + di + '" value="' + escapeHtml(day.date) + '"></div>' +
       '<div class="ev-list"></div>' +
       '<button class="btn btn-ghost btn-sm" data-add="' + di + '" type="button">+ Добавить событие</button>';
     wrap.appendChild(block);
@@ -158,6 +163,9 @@ function renderScheduleEditor() {
 
     block.querySelector('[data-day]').addEventListener('input', (e) => {
       scheduleDraft[di].day = e.target.value;
+    });
+    block.querySelector('[data-date]').addEventListener('input', (e) => {
+      scheduleDraft[di].date = e.target.value;
     });
     block.querySelector('[data-add]').addEventListener('click', () => {
       scheduleDraft[di].events.push({ time: '12:00', title: 'Новое событие' });
@@ -184,7 +192,7 @@ async function saveSchedule() {
   try {
     if (DEV_MODE) { showToast('DEV_MODE: сохранение пропущено'); return; }
     await db.collection('schedule').doc('current').set({
-      days: scheduleDraft.map((d) => ({ day: d.day, events: d.events })),
+      days: scheduleDraft.map((d) => ({ day: d.day, date: d.date || '', events: d.events })),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     showToast('Расписание сохранено');
