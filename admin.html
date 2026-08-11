@@ -32,6 +32,9 @@
   <div id="panel" class="shell" style="display:none">
     <header class="appbar">
       <span class="appbar-logo"><i data-feather="activity"></i> МедиаволнApp</span>
+      <button id="btn-to-app" class="appbar-admin" style="display:inline-flex" type="button" title="К приложению участника">
+        <i data-feather="arrow-left"></i>
+      </button>
     </header>
     <header class="hdr rise" style="margin-bottom:20px">
       <div id="admin-avatar" class="hdr-avatar">А</div>
@@ -48,9 +51,13 @@
 
     <!-- РАСПИСАНИЕ -->
     <div class="tab-pane" data-pane="schedule">
-      <div class="sec-sub">Укажи дату каждого дня — участники увидят только день с сегодняшней датой. Сохраняется в schedule/current; участники увидят после кнопки «Обновить».</div>
-      <div id="sched-edit"></div>
-      <button id="btn-save-schedule" class="btn btn-block" type="button" style="margin-top:14px">Сохранить расписание</button>
+      <div id="sched-status" class="sec-sub" style="margin-bottom:14px"></div>
+      <div class="field" style="margin-bottom:14px">
+        <label>Пресет на день</label>
+        <div class="sec-sub" style="margin:0 0 8px">Пиши дни в конструкторе и сохраняй как пресет. Утром выбери, какой пресет выставить на сегодня — участники увидят его после кнопки «Обновить» в приложении.</div>
+        <button id="btn-new-preset" class="btn btn-block" type="button">+ Новый пресет</button>
+      </div>
+      <div id="sched-list"></div>
     </div>
 
     <!-- ЗАДАНИЯ -->

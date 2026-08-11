@@ -7,7 +7,6 @@
 
 let db, auth;
 let ADMINS = [];
-let scheduleDraft = [];          // редактируемое расписание (локальная копия)
 let usersCache = [];             // все участники для поиска
 let allTasks = [];               // все задания
 let activeTab = 'schedule';
@@ -78,7 +77,7 @@ async function initAdmin() {
     showAdmin(true, vk);
     bindTabs();
     await Promise.all([loadUsers(), loadTasks()]);
-    loadScheduleDraft();
+    loadSchedulePanel();
     renderStats();
     switchTab('schedule');
   } catch (err) {
@@ -119,28 +118,140 @@ function switchTab(name) {
 }
 
 /* ============================================================
-   РАСПИСАНИЕ
+   РАСПИСАНИЕ — пресеты
+   Админ пишет дни в конструкторе и сохраняет их как ПРЕСЕТ,
+   утром выбирает, какой пресет выставить на день (schedule/current).
+   Хранение: schedule/{id} с docType='preset'; активный — schedule/current.
    ============================================================ */
-function loadScheduleDraft() {
-  scheduleDraft = DEFAULT_SCHEDULE.map((d) => ({
-    day: d.day,
-    date: d.date || '',
-    events: d.events.map((e) => ({ ...e })),
-  }));
-  renderScheduleEditor();
+let presetsCache = [];      // [{id, name, days, updatedAt}]
+let activePreset = null;    // {presetId, presetName, days} из schedule/current
+let editPreset = null;      // копия редактируемого пресета
+let editId = null;          // id в Firestore (null = новый пресет)
+
+function loadSchedulePanel() {
+  if (DEV_MODE) {
+    presetsCache = [{ id: 'dev', name: 'Шаблон слёта (3 дня)', days: DEFAULT_SCHEDULE }];
+    activePreset = null;
+    renderSchedulePanel();
+    return;
+  }
+  db.collection('schedule').get()
+    .then((snap) => {
+      presetsCache = [];
+      activePreset = null;
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        if (data.docType === 'preset') {
+          presetsCache.push({
+            id: d.id,
+            name: data.name || 'Пресет',
+            days: Array.isArray(data.days) ? data.days : [],
+            updatedAt: data.updatedAt,
+          });
+        } else if (d.id === 'current') {
+          activePreset = {
+            presetId: data.presetId || '',
+            presetName: data.presetName || '',
+            days: Array.isArray(data.days) ? data.days : [],
+          };
+        }
+      });
+      renderSchedulePanel();
+    })
+    .catch((err) => showToast('Не удалось загрузить пресеты: ' + err.message, true));
 }
 
-function renderScheduleEditor() {
-  const wrap = document.getElementById('sched-edit');
+function renderSchedulePanel() {
+  const status = document.getElementById('sched-status');
+  if (status) {
+    status.innerHTML = activePreset && activePreset.presetName
+      ? '<i data-feather="check-circle"></i> Сегодня выставлен: <b>' + escapeHtml(activePreset.presetName) + '</b>'
+      : '<i data-feather="info"></i> На сегодня пока ничего не выставлено';
+  }
+  const wrap = document.getElementById('sched-list');
+  if (!presetsCache.length) {
+    wrap.innerHTML = '<div class="empty">Пресетов пока нет — создай первый.</div>';
+    if (window.feather) feather.replace();
+    return;
+  }
+  wrap.innerHTML = presetsCache.map((p) =>
+    '<div class="row-item" style="flex-wrap:wrap">' +
+    '<div class="grow"><b>' + escapeHtml(p.name) + '</b>' +
+    '<small>' + p.days.length + ' дн. · ' + fmtPresetTime(p.updatedAt) + '</small></div>' +
+    '<div class="row-actions">' +
+    '<button class="btn btn-sm" data-use="' + p.id + '" type="button">Выставить на сегодня</button>' +
+    '<button class="btn btn-ghost btn-sm" data-edit="' + p.id + '" type="button">Редактировать</button>' +
+    '<button class="btn btn-danger btn-sm" data-pdel="' + p.id + '" type="button"><i data-feather="trash-2"></i></button>' +
+    '</div></div>'
+  ).join('');
+  if (window.feather) feather.replace();
+}
+
+function fmtPresetTime(ts) {
+  if (!ts || typeof ts.toDate !== 'function') return '—';
+  return 'обновлён ' + ts.toDate().toLocaleDateString('ru-RU');
+}
+
+/* ---------- Конструктор пресета (модал) ---------- */
+function newPreset() {
+  editPreset = {
+    name: '',
+    days: [{ day: 'День 1', events: [{ time: '10:00', title: 'Событие' }] }],
+  };
+  editId = null;
+  openPresetEditor();
+}
+
+function editPresetById(id) {
+  const p = presetsCache.find((x) => x.id === id);
+  if (!p) return;
+  editPreset = JSON.parse(JSON.stringify({ name: p.name, days: p.days }));
+  editId = id;
+  openPresetEditor();
+}
+
+function openPresetEditor() {
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.id = 'edit-modal';
+  back.innerHTML =
+    '<div class="modal">' +
+    '<div class="field"><label>Название пресета</label>' +
+    '<input id="edit-name" class="input" value="' + escapeHtml(editPreset.name) + '" placeholder="Например: День 2 — Команды"></div>' +
+    '<div id="edit-days"></div>' +
+    '<button id="edit-add-day" class="btn btn-ghost btn-block" type="button">+ Добавить день</button>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
+    '<button id="edit-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
+    '<button id="edit-save" class="btn" type="button">Сохранить пресет</button>' +
+    '</div></div>';
+  document.body.appendChild(back);
+
+  back.querySelector('#edit-cancel').addEventListener('click', () => back.remove());
+  back.querySelector('#edit-save').addEventListener('click', savePreset);
+  back.querySelector('#edit-add-day').addEventListener('click', () => {
+    editPreset.days.push({ day: 'День ' + (editPreset.days.length + 1), events: [{ time: '10:00', title: 'Событие' }] });
+    renderEditDays();
+  });
+  back.querySelector('#edit-name').addEventListener('input', (e) => {
+    editPreset.name = e.target.value;
+  });
+  renderEditDays();
+}
+
+function renderEditDays() {
+  const wrap = document.getElementById('edit-days');
+  if (!wrap) return;
   wrap.innerHTML = '';
-  scheduleDraft.forEach((day, di) => {
+  editPreset.days.forEach((day, di) => {
     const block = document.createElement('div');
     block.className = 'card';
+    block.style.marginBottom = '10px';
     block.innerHTML =
-      '<div class="field"><label>День</label>' +
+      '<div class="field" style="display:flex;gap:8px;align-items:flex-end">' +
+      '<div style="flex:1"><label>День ' + (di + 1) + '</label>' +
       '<input class="input" data-day="' + di + '" value="' + escapeHtml(day.day) + '"></div>' +
-      '<div class="field"><label>Дата (день покажется участникам именно в эту дату)</label>' +
-      '<input class="input" type="date" data-date="' + di + '" value="' + escapeHtml(day.date) + '"></div>' +
+      '<button class="btn btn-danger btn-sm" data-rmday="' + di + '" type="button" title="Удалить день"><i data-feather="x"></i></button>' +
+      '</div>' +
       '<div class="ev-list"></div>' +
       '<button class="btn btn-ghost btn-sm" data-add="' + di + '" type="button">+ Добавить событие</button>';
     wrap.appendChild(block);
@@ -155,47 +266,109 @@ function renderScheduleEditor() {
         '<input class="input grow" data-title="' + di + '-' + ei + '" value="' + escapeHtml(ev.title) + '" placeholder="Название">' +
         '<button class="btn btn-ghost btn-sm" data-del="' + di + '-' + ei + '" type="button" title="Удалить"><i data-feather="trash-2"></i></button>';
       evList.appendChild(row);
-      row.querySelector('[data-del]').addEventListener('click', () => {
-        scheduleDraft[di].events.splice(ei, 1);
-        renderScheduleEditor();
-      });
     });
 
     block.querySelector('[data-day]').addEventListener('input', (e) => {
-      scheduleDraft[di].day = e.target.value;
-    });
-    block.querySelector('[data-date]').addEventListener('input', (e) => {
-      scheduleDraft[di].date = e.target.value;
+      editPreset.days[di].day = e.target.value;
     });
     block.querySelector('[data-add]').addEventListener('click', () => {
-      scheduleDraft[di].events.push({ time: '12:00', title: 'Новое событие' });
-      renderScheduleEditor();
+      editPreset.days[di].events.push({ time: '12:00', title: 'Новое событие' });
+      renderEditDays();
+    });
+    block.querySelector('[data-rmday]').addEventListener('click', () => {
+      editPreset.days.splice(di, 1);
+      renderEditDays();
     });
   });
-  // live-обновление времени/названий
-  document.querySelectorAll('#sched-edit [data-time]').forEach((el) => {
+  document.querySelectorAll('#edit-days [data-time]').forEach((el) => {
     el.addEventListener('input', () => {
       const [di, ei] = el.dataset.time.split('-').map(Number);
-      scheduleDraft[di].events[ei].time = el.value;
+      editPreset.days[di].events[ei].time = el.value;
     });
   });
-  document.querySelectorAll('#sched-edit [data-title]').forEach((el) => {
+  document.querySelectorAll('#edit-days [data-title]').forEach((el) => {
     el.addEventListener('input', () => {
       const [di, ei] = el.dataset.title.split('-').map(Number);
-      scheduleDraft[di].events[ei].title = el.value;
+      editPreset.days[di].events[ei].title = el.value;
+    });
+  });
+  document.querySelectorAll('#edit-days [data-del]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const [di, ei] = el.dataset.del.split('-').map(Number);
+      editPreset.days[di].events.splice(ei, 1);
+      renderEditDays();
     });
   });
   if (window.feather) feather.replace();
 }
 
-async function saveSchedule() {
+async function savePreset() {
+  const name = (editPreset.name || '').trim();
+  const days = editPreset.days
+    .map((d) => ({ day: d.day, events: d.events }))
+    .filter((d) => d.day && d.day.trim());
+  if (!name) { showToast('Введи название пресета', true); return; }
+  if (!days.length) { showToast('Добавь хотя бы один день', true); return; }
   try {
-    if (DEV_MODE) { showToast('DEV_MODE: сохранение пропущено'); return; }
+    if (DEV_MODE) {
+      presetsCache.push({ id: 'dev-' + Date.now(), name: name, days: days, updatedAt: null });
+      renderSchedulePanel();
+    } else if (editId) {
+      await db.collection('schedule').doc(editId).set({
+        docType: 'preset', name: name, days: days,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      await db.collection('schedule').add({
+        docType: 'preset', name: name, days: days,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    const modal = document.getElementById('edit-modal');
+    if (modal) modal.remove();
+    showToast('Пресет сохранён');
+    loadSchedulePanel();
+  } catch (err) {
+    showToast('Ошибка: ' + err.message, true);
+  }
+}
+
+async function deletePresetById(id) {
+  const ok = await confirmDialog('Удалить пресет?');
+  if (!ok) return;
+  try {
+    if (DEV_MODE) {
+      presetsCache = presetsCache.filter((p) => p.id !== id);
+      renderSchedulePanel();
+      return;
+    }
+    await db.collection('schedule').doc(id).delete();
+    showToast('Пресет удалён');
+    loadSchedulePanel();
+  } catch (err) {
+    showToast('Ошибка: ' + err.message, true);
+  }
+}
+
+async function activatePreset(id) {
+  const p = presetsCache.find((x) => x.id === id);
+  if (!p) return;
+  try {
+    if (DEV_MODE) {
+      activePreset = { presetId: id, presetName: p.name, days: p.days };
+      renderSchedulePanel();
+      showToast('Выставлено: ' + p.name);
+      return;
+    }
     await db.collection('schedule').doc('current').set({
-      days: scheduleDraft.map((d) => ({ day: d.day, date: d.date || '', events: d.events })),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      docType: 'current',
+      presetId: id,
+      presetName: p.name,
+      days: JSON.parse(JSON.stringify(p.days)),
+      setAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    showToast('Расписание сохранено');
+    showToast('Выставлено на сегодня: ' + p.name);
+    loadSchedulePanel();
   } catch (err) {
     showToast('Ошибка: ' + err.message, true);
   }
@@ -410,7 +583,11 @@ function renderStats() {
    Привязка событий
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('btn-save-schedule').addEventListener('click', saveSchedule);
+  const toApp = document.getElementById('btn-to-app');
+  if (toApp) {
+    toApp.addEventListener('click', () => { location.href = 'index.html' + location.search; });
+  }
+  document.getElementById('btn-new-preset').addEventListener('click', newPreset);
   document.getElementById('btn-add-task').addEventListener('click', () => {
     const text = document.getElementById('task-text').value.trim();
     const points = Number(document.getElementById('task-points').value);
@@ -430,6 +607,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('click', async (e) => {
+    const use = e.target.closest('[data-use]');
+    if (use) { activatePreset(use.dataset.use); return; }
+    const pedit = e.target.closest('[data-edit]');
+    if (pedit) { editPresetById(pedit.dataset.edit); return; }
+    const pdel = e.target.closest('[data-pdel]');
+    if (pdel) { deletePresetById(pdel.dataset.pdel); return; }
     const del = e.target.closest('[data-del]');
     if (del && del.dataset.del) { deleteTask(del.dataset.del); return; }
     const tog = e.target.closest('[data-tog]');

@@ -61,6 +61,7 @@ async function init() {
       subscribeRating();
       subscribeTasks(myUid);
     }
+    maybeShowAdminBtn(vk);
   } catch (err) {
     console.error(err);
     showToast('Не удалось загрузить приложение: ' + err.message, true);
@@ -102,6 +103,20 @@ function escapeHtml(s) {
   }[c]));
 }
 
+/* Кнопка «Админ» в шапке: показываем только организаторам (VK ID из config/admins) */
+async function maybeShowAdminBtn(vk) {
+  const btn = document.getElementById('btn-admin');
+  if (!btn) return;
+  if (DEV_MODE) { btn.style.display = 'inline-flex'; return; }
+  try {
+    const snap = await db.collection('config').doc('admins').get();
+    const ids = snap.exists && Array.isArray(snap.data().ids)
+      ? snap.data().ids.map(String)
+      : [];
+    if (ids.includes(String(vk.id))) btn.style.display = 'inline-flex';
+  } catch (err) { /* молчим — кнопка просто не покажется */ }
+}
+
 /* ---------- Realtime с фолбэком ----------
    onSnapshot — основной источник, но если за firstMs он ничего не прислал
    (напр. iOS WKWebView глушит long-polling-канал), догружаем get()
@@ -134,33 +149,18 @@ function setScore(n) {
 }
 
 /* ---------- Расписание ---------- */
-/* Сегодняшняя дата в локальном времени (ГГГГ-ММ-ДД) */
-function todayStr() {
-  const d = new Date();
-  return d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0');
-}
-
 function renderSchedule() {
   const wrap = document.getElementById('schedule');
   const cached = localStorage.getItem(SCHEDULE_CACHE_KEY);
   const list = cached ? JSON.parse(cached) : DEFAULT_SCHEDULE;
 
-  // Даты ещё не расставлены админом → показываем всё (демо/до настройки).
-  // Иначе показываем ТОЛЬКО день с сегодняшней датой.
-  const anyDate = list.some((d) => d && d.date);
-  const shown = anyDate
-    ? list.filter((d) => d && d.date === todayStr())
-    : list;
-
-  if (!shown.length) {
-    wrap.innerHTML = '<div class="empty">Расписание на сегодня ещё не опубликовано</div>';
+  if (!list || !list.length) {
+    wrap.innerHTML = '<div class="empty">Расписание ещё не опубликовано</div>';
     return;
   }
 
   wrap.innerHTML = '';
-  shown.forEach((day, di) => {
+  list.forEach((day, di) => {
     const item = document.createElement('div');
     item.className = 'acc' + (di === 0 ? ' open' : '');
     const inner = day.events.map((e) =>
@@ -188,7 +188,8 @@ async function refreshSchedule() {
     if (snap.exists && Array.isArray(snap.data().days)) {
       localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify(snap.data().days));
       renderSchedule();
-      showToast('Расписание обновлено');
+      const name = snap.data().presetName;
+      showToast(name ? 'Выставлено: ' + name : 'Расписание обновлено');
     } else {
       showToast('Актуальное расписание ещё не загружено', true);
     }
@@ -356,5 +357,11 @@ function renderRating(listOverride) {
 /* ---------- Запуск ---------- */
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sched-refresh').addEventListener('click', refreshSchedule);
+  const adminBtn = document.getElementById('btn-admin');
+  if (adminBtn) {
+    adminBtn.addEventListener('click', () => {
+      location.href = 'admin.html' + location.search;
+    });
+  }
   init();
 });

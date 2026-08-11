@@ -77,6 +77,20 @@ body {
 }
 .appbar-logo .feather { width: 18px; height: 18px; color: var(--accent); }
 
+/* Кнопка входа в админку (в шапке). Скрыта, пока не подтверждён VK ID админа. */
+.appbar-admin {
+  margin-left: auto;
+  display: none;
+  align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  background: var(--card-2); border: 1px solid var(--line-green);
+  border-radius: 50%; cursor: pointer; color: var(--accent);
+  transition: transform 0.12s var(--ease), box-shadow 0.2s;
+}
+.appbar-admin:active { transform: scale(0.92); }
+.appbar-admin:hover { box-shadow: var(--glow); }
+.appbar-admin .feather { width: 18px; height: 18px; }
+
 /* ---------- Шапка участника ---------- */
 .hdr {
   display: flex; align-items: center; gap: 12px;
