@@ -91,6 +91,13 @@ body {
 .appbar-admin:hover { box-shadow: var(--glow); }
 .appbar-admin .feather { width: 18px; height: 18px; }
 
+/* Кнопка «назад» в админке — слева, чтобы не попадать под крестик VK справа вверху */
+#btn-to-app {
+  margin-left: 0;
+  margin-right: 10px;
+  order: -1;
+}
+
 /* ---------- Шапка участника ---------- */
 .hdr {
   display: flex; align-items: center; gap: 12px;

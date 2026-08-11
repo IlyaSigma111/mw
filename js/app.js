@@ -73,17 +73,24 @@ async function init() {
 
 const DEFAULT_TASKS_EMPTY = [];
 
-/* Создать документ users/vk_<VK ID> при первом входе (score: 0) */
+/* Создать документ users/vk_<VK ID> при первом входе (score: 0);
+   при повторных входах обновляем имя/аватар из VK, баллы и done не трогаем. */
 async function ensureUserDoc(uid, vk) {
   const ref = db.collection('users').doc(uid);
   const snap = await ref.get();
-  if (!snap.exists) {
+  if (snap.exists) {
+    await ref.set({
+      vkId: String(vk.id),
+      name: (vk.first_name + ' ' + vk.last_name).trim(),
+      avatar: vk.photo_100 || '',
+    }, { merge: true });
+  } else {
     await ref.set({
       vkId: String(vk.id),
       name: (vk.first_name + ' ' + vk.last_name).trim(),
       avatar: vk.photo_100 || '',
       score: 0,
-      done: [],
+      done: {},          // {taskId: сколько раз выполнено}
     });
   }
 }
@@ -142,16 +149,20 @@ function subscribeScore(uid) {
       if (snap.exists) {
         const d = snap.data();
         document.getElementById('score-num').textContent = d.score || 0;
-        // Синхронизируем «выполненные задания» с других устройств
+        // Синхронизируем «выполненные задания» с других устройств.
+        // done может быть как map'ом {id: счётчик}, так и старым массивом id.
+        let changed = false;
+        const sync = (id, count) => {
+          if ((doneCache[id] || 0) < count) { doneCache[id] = count; changed = true; }
+        };
         if (Array.isArray(d.done)) {
-          let changed = false;
-          d.done.forEach((id) => {
-            if (!doneCache[id]) { doneCache[id] = true; changed = true; }
-          });
-          if (changed) {
-            localStorage.setItem(SELF_DOC_CACHE, JSON.stringify(doneCache));
-            if (lastTasks.length) renderTasks(lastTasks);
-          }
+          d.done.forEach((id) => sync(id, 1));
+        } else if (d.done && typeof d.done === 'object') {
+          Object.keys(d.done).forEach((id) => sync(id, Number(d.done[id]) || 1));
+        }
+        if (changed) {
+          localStorage.setItem(SELF_DOC_CACHE, JSON.stringify(doneCache));
+          if (lastTasks.length) renderTasks(lastTasks);
         }
       }
     },
@@ -167,15 +178,30 @@ function setScore(n) {
 function renderSchedule() {
   const wrap = document.getElementById('schedule');
   const cached = localStorage.getItem(SCHEDULE_CACHE_KEY);
-  const list = cached ? JSON.parse(cached) : DEFAULT_SCHEDULE;
+  const raw = cached ? JSON.parse(cached) : DEFAULT_SCHEDULE;
+  const days = Array.isArray(raw) ? raw : [raw];
 
-  if (!list || !list.length) {
+  if (!days.length || !Array.isArray(days[0].events)) {
     wrap.innerHTML = '<div class="empty">Расписание ещё не опубликовано</div>';
     return;
   }
 
+  if (days.length === 1) {
+    const d = days[0];
+    wrap.innerHTML =
+      '<div class="acc open">' +
+      '<div class="acc-head" style="cursor:default"><span>' + escapeHtml(d.day || 'Расписание на сегодня') + '</span></div>' +
+      '<div class="acc-body" style="display:block">' +
+      d.events.map((e) =>
+        '<div class="ev"><span class="ev-time">' + escapeHtml(e.time) + '</span>' +
+        '<span class="ev-title">' + escapeHtml(e.title) + '</span></div>'
+      ).join('') +
+      '</div></div>';
+    return;
+  }
+
   wrap.innerHTML = '';
-  list.forEach((day, di) => {
+  days.forEach((day, di) => {
     const item = document.createElement('div');
     item.className = 'acc' + (di === 0 ? ' open' : '');
     const inner = day.events.map((e) =>
@@ -200,10 +226,19 @@ async function refreshSchedule() {
   if (!db) { showToast('Приложение ещё не готово, обнови страницу', true); return; }
   try {
     const snap = await db.collection('schedule').doc('current').get();
-    if (snap.exists && Array.isArray(snap.data().days)) {
-      localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify(snap.data().days));
+    if (!snap.exists) {
+      showToast('Актуальное расписание ещё не загружено', true);
+      return;
+    }
+    const data = snap.data();
+    const name = data.presetName || data.day || 'Расписание на сегодня';
+    if (Array.isArray(data.events)) {
+      localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify({ day: name, events: data.events }));
       renderSchedule();
-      const name = snap.data().presetName;
+      showToast('Выставлено: ' + name);
+    } else if (Array.isArray(data.days)) {
+      localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify(data.days));
+      renderSchedule();
       showToast(name ? 'Выставлено: ' + name : 'Расписание обновлено');
     } else {
       showToast('Актуальное расписание ещё не загружено', true);
@@ -267,23 +302,64 @@ function subscribeTasks(uid) {
   );
 }
 
+/* ---------- Помощники заданий: типы, лимит повторов, день ---------- */
+function taskLimit(t) {
+  return t.type === 'repeat' ? Math.max(1, Number(t.limit) || 3) : 1;
+}
+function taskCount(t) {
+  const c = doneCache[t.id];
+  if (typeof c === 'number') return c;
+  return c ? 1 : 0;                      // старый кэш {id: true}
+}
+function taskDone(t) {
+  return taskCount(t) >= taskLimit(t);
+}
+
+/* Видимость по дню: пусто = всегда; иначе дата (2026-08-15), день недели или
+   метка текущего выставленного пресета (напр. «День 1» при «День 1 — Команды»). */
+function taskDayVisible(t) {
+  if (!t.day || !String(t.day).trim()) return true;
+  const want = String(t.day).trim().toLowerCase();
+  const now = new Date();
+  const pad = (n) => (n < 10 ? '0' : '') + n;
+  const ymd = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  if (want === ymd) return true;
+  const wd = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'][now.getDay()];
+  if (want === wd || want === wd.slice(0, 2)) return true;
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(SCHEDULE_CACHE_KEY) || 'null'); } catch (e) {}
+  if (cached) {
+    const days = Array.isArray(cached) ? cached : [cached];
+    const labels = days.map((d) => String((d && d.day) || '').toLowerCase()).filter(Boolean);
+    if (labels.some((l) => l.indexOf(want) >= 0 || want.indexOf(l) >= 0)) return true;
+  }
+  return false;
+}
+
 function renderTasks(list) {
   lastTasks = list;
   const wrap = document.getElementById('tasks');
-  const undone = list.filter((t) => !doneCache[t.id]);
-  const doneCount = list.length - undone.length;
+  const visible = list.filter((t) => taskDayVisible(t));
+  const undone = visible.filter((t) => !taskDone(t));
+  const doneCount = visible.length - undone.length;
 
   if (!undone.length && !doneCount) {
     wrap.innerHTML = '<div class="empty">Заданий пока нет. Отдыхай!</div>';
     return;
   }
-  wrap.innerHTML = undone.map((t) =>
-    '<div class="card task rise" data-id="' + t.id + '">' +
-    '<span class="task-text">' + escapeHtml(t.text) + '</span>' +
-    '<span class="task-pts">+' + t.points + '</span>' +
-    '<button class="btn btn-sm" data-act="do">Выполнить</button>' +
-    '</div>'
-  ).join('') +
+  wrap.innerHTML = undone.map((t) => {
+    const cnt = taskCount(t);
+    const lim = taskLimit(t);
+    const progress = t.type === 'repeat' ? ' <span class="badge badge-on">' + cnt + '/' + lim + '</span>' : '';
+    const dayChip = t.day && String(t.day).trim() ? ' <span class="badge badge-off">' + escapeHtml(t.day) + '</span>' : '';
+    return (
+      '<div class="card task rise" data-id="' + t.id + '">' +
+      '<span class="task-text">' + escapeHtml(t.text) + dayChip + '</span>' +
+      '<span class="task-pts">+' + t.points + progress + '</span>' +
+      '<button class="btn btn-sm" data-act="do">' + (cnt > 0 ? 'Ещё раз' : 'Выполнить') + '</button>' +
+      '</div>'
+    );
+  }).join('') +
   (doneCount
     ? '<div class="hint" style="text-align:center">Выполнено заданий: ' + doneCount + '</div>'
     : '');
@@ -301,6 +377,9 @@ function renderTasks(list) {
 }
 
 async function doTask(task) {
+  const lim = taskLimit(task);
+  const next = taskCount(task) + 1;
+  if (next > lim) { showToast('Лимит выполнений исчерпан', true); return; }
   try {
     if (DEV_MODE) {
       const cur = Number(localStorage.getItem('mw_dev_score') || 0) + task.points;
@@ -310,14 +389,14 @@ async function doTask(task) {
       const myUid = 'vk_' + myVkId;
       await db.collection('users').doc(myUid).update({
         score: firebase.firestore.FieldValue.increment(task.points),
-        done: firebase.firestore.FieldValue.arrayUnion(task.id),
+        ['done.' + task.id]: firebase.firestore.FieldValue.increment(1),
       });
     }
-    doneCache[task.id] = true;               // задание больше не показываем
+    doneCache[task.id] = next;
     localStorage.setItem(SELF_DOC_CACHE, JSON.stringify(doneCache));
-    renderTasks(lastTasks);                  // скрыть выполненное сразу
+    renderTasks(lastTasks);                  // обновить счётчик/скрыть сразу
     vkToast('+' + task.points + ' баллов!');
-    showToast('Задание выполнено: +' + task.points + ' баллов');
+    showToast('Задание выполнено: +' + task.points + ' баллов' + (next < lim ? ' (' + next + '/' + lim + ')' : ''));
   } catch (err) {
     showToast('Не удалось выполнить: ' + err.message, true);
   }

@@ -119,18 +119,18 @@ function switchTab(name) {
 
 /* ============================================================
    РАСПИСАНИЕ — пресеты
-   Админ пишет дни в конструкторе и сохраняет их как ПРЕСЕТ,
-   утром выбирает, какой пресет выставить на день (schedule/current).
+   Пресет = ОДИН день: { name, events: [{time, title}] }.
+   Утром админ выставляет нужный пресет на сегодня (schedule/current).
    Хранение: schedule/{id} с docType='preset'; активный — schedule/current.
    ============================================================ */
-let presetsCache = [];      // [{id, name, days, updatedAt}]
-let activePreset = null;    // {presetId, presetName, days} из schedule/current
+let presetsCache = [];      // [{id, name, events, updatedAt}]
+let activePreset = null;    // {presetId, presetName, events} из schedule/current
 let editPreset = null;      // копия редактируемого пресета
 let editId = null;          // id в Firestore (null = новый пресет)
 
 function loadSchedulePanel() {
   if (DEV_MODE) {
-    presetsCache = [{ id: 'dev', name: 'Шаблон слёта (3 дня)', days: DEFAULT_SCHEDULE }];
+    presetsCache = [{ id: 'dev', name: 'День 1 — Знакомство', events: DEFAULT_SCHEDULE.events }];
     activePreset = null;
     renderSchedulePanel();
     return;
@@ -145,14 +145,14 @@ function loadSchedulePanel() {
           presetsCache.push({
             id: d.id,
             name: data.name || 'Пресет',
-            days: Array.isArray(data.days) ? data.days : [],
+            events: Array.isArray(data.events) ? data.events : [],
             updatedAt: data.updatedAt,
           });
         } else if (d.id === 'current') {
           activePreset = {
             presetId: data.presetId || '',
             presetName: data.presetName || '',
-            days: Array.isArray(data.days) ? data.days : [],
+            events: Array.isArray(data.events) ? data.events : [],
           };
         }
       });
@@ -177,7 +177,7 @@ function renderSchedulePanel() {
   wrap.innerHTML = presetsCache.map((p) =>
     '<div class="row-item" style="flex-wrap:wrap">' +
     '<div class="grow"><b>' + escapeHtml(p.name) + '</b>' +
-    '<small>' + p.days.length + ' дн. · ' + fmtPresetTime(p.updatedAt) + '</small></div>' +
+    '<small>' + p.events.length + ' соб. · ' + fmtPresetTime(p.updatedAt) + '</small></div>' +
     '<div class="row-actions">' +
     '<button class="btn btn-sm" data-use="' + p.id + '" type="button">Выставить на сегодня</button>' +
     '<button class="btn btn-ghost btn-sm" data-edit="' + p.id + '" type="button">Редактировать</button>' +
@@ -192,11 +192,11 @@ function fmtPresetTime(ts) {
   return 'обновлён ' + ts.toDate().toLocaleDateString('ru-RU');
 }
 
-/* ---------- Конструктор пресета (модал) ---------- */
+/* ---------- Конструктор пресета (модал): пресет = один день ---------- */
 function newPreset() {
   editPreset = {
     name: '',
-    days: [{ day: 'День 1', events: [{ time: '10:00', title: 'Событие' }] }],
+    events: [{ time: '10:00', title: 'Событие' }],
   };
   editId = null;
   openPresetEditor();
@@ -205,7 +205,7 @@ function newPreset() {
 function editPresetById(id) {
   const p = presetsCache.find((x) => x.id === id);
   if (!p) return;
-  editPreset = JSON.parse(JSON.stringify({ name: p.name, days: p.days }));
+  editPreset = JSON.parse(JSON.stringify({ name: p.name, events: p.events }));
   editId = id;
   openPresetEditor();
 }
@@ -216,10 +216,10 @@ function openPresetEditor() {
   back.id = 'edit-modal';
   back.innerHTML =
     '<div class="modal">' +
-    '<div class="field"><label>Название пресета</label>' +
+    '<div class="field"><label>Название дня</label>' +
     '<input id="edit-name" class="input" value="' + escapeHtml(editPreset.name) + '" placeholder="Например: День 2 — Команды"></div>' +
-    '<div id="edit-days"></div>' +
-    '<button id="edit-add-day" class="btn btn-ghost btn-block" type="button">+ Добавить день</button>' +
+    '<div id="edit-events"></div>' +
+    '<button id="edit-add-ev" class="btn btn-ghost btn-block" type="button">+ Добавить событие</button>' +
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
     '<button id="edit-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
     '<button id="edit-save" class="btn" type="button">Сохранить пресет</button>' +
@@ -228,75 +228,44 @@ function openPresetEditor() {
 
   back.querySelector('#edit-cancel').addEventListener('click', () => back.remove());
   back.querySelector('#edit-save').addEventListener('click', savePreset);
-  back.querySelector('#edit-add-day').addEventListener('click', () => {
-    editPreset.days.push({ day: 'День ' + (editPreset.days.length + 1), events: [{ time: '10:00', title: 'Событие' }] });
-    renderEditDays();
+  back.querySelector('#edit-add-ev').addEventListener('click', () => {
+    editPreset.events.push({ time: '12:00', title: 'Новое событие' });
+    renderEditEvents();
   });
   back.querySelector('#edit-name').addEventListener('input', (e) => {
     editPreset.name = e.target.value;
   });
-  renderEditDays();
+  renderEditEvents();
 }
 
-function renderEditDays() {
-  const wrap = document.getElementById('edit-days');
+function renderEditEvents() {
+  const wrap = document.getElementById('edit-events');
   if (!wrap) return;
   wrap.innerHTML = '';
-  editPreset.days.forEach((day, di) => {
-    const block = document.createElement('div');
-    block.className = 'card';
-    block.style.marginBottom = '10px';
-    block.innerHTML =
-      '<div class="field" style="display:flex;gap:8px;align-items:flex-end">' +
-      '<div style="flex:1"><label>День ' + (di + 1) + '</label>' +
-      '<input class="input" data-day="' + di + '" value="' + escapeHtml(day.day) + '"></div>' +
-      '<button class="btn btn-danger btn-sm" data-rmday="' + di + '" type="button" title="Удалить день"><i data-feather="x"></i></button>' +
-      '</div>' +
-      '<div class="ev-list"></div>' +
-      '<button class="btn btn-ghost btn-sm" data-add="' + di + '" type="button">+ Добавить событие</button>';
-    wrap.appendChild(block);
-
-    const evList = block.querySelector('.ev-list');
-    day.events.forEach((ev, ei) => {
-      const row = document.createElement('div');
-      row.className = 'row-item';
-      row.style.marginTop = '8px';
-      row.innerHTML =
-        '<input class="input" data-time="' + di + '-' + ei + '" value="' + escapeHtml(ev.time) + '" style="width:76px" placeholder="10:00">' +
-        '<input class="input grow" data-title="' + di + '-' + ei + '" value="' + escapeHtml(ev.title) + '" placeholder="Название">' +
-        '<button class="btn btn-ghost btn-sm" data-del="' + di + '-' + ei + '" type="button" title="Удалить"><i data-feather="trash-2"></i></button>';
-      evList.appendChild(row);
-    });
-
-    block.querySelector('[data-day]').addEventListener('input', (e) => {
-      editPreset.days[di].day = e.target.value;
-    });
-    block.querySelector('[data-add]').addEventListener('click', () => {
-      editPreset.days[di].events.push({ time: '12:00', title: 'Новое событие' });
-      renderEditDays();
-    });
-    block.querySelector('[data-rmday]').addEventListener('click', () => {
-      editPreset.days.splice(di, 1);
-      renderEditDays();
-    });
+  editPreset.events.forEach((ev, ei) => {
+    const row = document.createElement('div');
+    row.className = 'row-item';
+    row.style.marginTop = '8px';
+    row.innerHTML =
+      '<input class="input" data-time="' + ei + '" value="' + escapeHtml(ev.time) + '" style="width:76px" placeholder="10:00">' +
+      '<input class="input grow" data-title="' + ei + '" value="' + escapeHtml(ev.title) + '" placeholder="Название">' +
+      '<button class="btn btn-ghost btn-sm" data-del="' + ei + '" type="button" title="Удалить"><i data-feather="trash-2"></i></button>';
+    wrap.appendChild(row);
   });
-  document.querySelectorAll('#edit-days [data-time]').forEach((el) => {
+  document.querySelectorAll('#edit-events [data-time]').forEach((el) => {
     el.addEventListener('input', () => {
-      const [di, ei] = el.dataset.time.split('-').map(Number);
-      editPreset.days[di].events[ei].time = el.value;
+      editPreset.events[Number(el.dataset.time)].time = el.value;
     });
   });
-  document.querySelectorAll('#edit-days [data-title]').forEach((el) => {
+  document.querySelectorAll('#edit-events [data-title]').forEach((el) => {
     el.addEventListener('input', () => {
-      const [di, ei] = el.dataset.title.split('-').map(Number);
-      editPreset.days[di].events[ei].title = el.value;
+      editPreset.events[Number(el.dataset.title)].title = el.value;
     });
   });
-  document.querySelectorAll('#edit-days [data-del]').forEach((el) => {
+  document.querySelectorAll('#edit-events [data-del]').forEach((el) => {
     el.addEventListener('click', () => {
-      const [di, ei] = el.dataset.del.split('-').map(Number);
-      editPreset.days[di].events.splice(ei, 1);
-      renderEditDays();
+      editPreset.events.splice(Number(el.dataset.del), 1);
+      renderEditEvents();
     });
   });
   if (window.feather) feather.replace();
@@ -304,23 +273,23 @@ function renderEditDays() {
 
 async function savePreset() {
   const name = (editPreset.name || '').trim();
-  const days = editPreset.days
-    .map((d) => ({ day: d.day, events: d.events }))
-    .filter((d) => d.day && d.day.trim());
-  if (!name) { showToast('Введи название пресета', true); return; }
-  if (!days.length) { showToast('Добавь хотя бы один день', true); return; }
+  const events = editPreset.events
+    .map((e) => ({ time: e.time, title: e.title }))
+    .filter((e) => e.time && e.time.trim() && e.title && e.title.trim());
+  if (!name) { showToast('Введи название дня', true); return; }
+  if (!events.length) { showToast('Добавь хотя бы одно событие', true); return; }
   try {
     if (DEV_MODE) {
-      presetsCache.push({ id: 'dev-' + Date.now(), name: name, days: days, updatedAt: null });
+      presetsCache.push({ id: 'dev-' + Date.now(), name: name, events: events, updatedAt: null });
       renderSchedulePanel();
     } else if (editId) {
       await db.collection('schedule').doc(editId).set({
-        docType: 'preset', name: name, days: days,
+        docType: 'preset', name: name, events: events,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
     } else {
       await db.collection('schedule').add({
-        docType: 'preset', name: name, days: days,
+        docType: 'preset', name: name, events: events,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
     }
@@ -355,7 +324,7 @@ async function activatePreset(id) {
   if (!p) return;
   try {
     if (DEV_MODE) {
-      activePreset = { presetId: id, presetName: p.name, days: p.days };
+      activePreset = { presetId: id, presetName: p.name, events: p.events };
       renderSchedulePanel();
       showToast('Выставлено: ' + p.name);
       return;
@@ -364,7 +333,7 @@ async function activatePreset(id) {
       docType: 'current',
       presetId: id,
       presetName: p.name,
-      days: JSON.parse(JSON.stringify(p.days)),
+      events: JSON.parse(JSON.stringify(p.events)),
       setAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     showToast('Выставлено на сегодня: ' + p.name);
@@ -390,6 +359,14 @@ async function loadTasks() {
   }
 }
 
+/* Короткое описание типа/лимита/дня задания для списка */
+function taskMeta(t) {
+  const bits = [];
+  if (t.type === 'repeat') bits.push('повтор · до ' + Math.max(1, t.limit || 3) + ' раз');
+  if (t.day && String(t.day).trim()) bits.push('день: ' + escapeHtml(t.day));
+  return bits.length ? ' · ' + bits.join(' · ') : '';
+}
+
 function renderTaskList() {
   const list = allTasks.filter((t) => {
     if (taskFilter === 'active') return t.active;
@@ -404,8 +381,9 @@ function renderTaskList() {
   wrap.innerHTML = list.map((t) =>
     '<div class="row-item">' +
     '<div class="grow"><b>' + escapeHtml(t.text) + '</b>' +
-    '<small>+' + t.points + ' баллов · ' + (t.active ? '<span class="badge badge-on">активно</span>' : '<span class="badge badge-off">выкл</span>') + '</small></div>' +
+    '<small>+' + t.points + ' баллов' + taskMeta(t) + ' · ' + (t.active ? '<span class="badge badge-on">активно</span>' : '<span class="badge badge-off">выкл</span>') + '</small></div>' +
     '<div class="row-actions">' +
+    '<button class="btn btn-ghost btn-sm" data-ed="' + t.id + '" type="button">Изменить</button>' +
     '<button class="btn btn-ghost btn-sm" data-tog="' + t.id + '" type="button">' + (t.active ? 'Выключить' : 'Включить') + '</button>' +
     '<button class="btn btn-danger btn-sm" data-del="' + t.id + '" type="button"><i data-feather="trash-2"></i></button>' +
     '</div></div>'
@@ -422,17 +400,110 @@ function bindTaskFilter() {
     }));
 }
 
-async function createTask(text, points) {
+/* Разбор массового ввода: одна строка = одно задание, «текст | N» — свои баллы */
+function parseTaskLines(raw, defPoints) {
+  return String(raw || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+    const parts = l.split('|').map((s) => s.trim());
+    const pts = parts.length > 1 && Number(parts[1]) >= 1 ? Number(parts[1]) : Number(defPoints);
+    return { text: parts[0], points: pts };
+  });
+}
+
+async function createTask(text, points, opts) {
+  opts = opts || {};
+  const type = opts.type === 'repeat' ? 'repeat' : 'once';
+  const limit = type === 'repeat' ? Math.max(1, Number(opts.limit) || 1) : 1;
+  const day = String(opts.day || '').trim();
   try {
-    if (DEV_MODE) { allTasks.unshift({ id: 'dev', text: text, points: points, active: true }); renderTaskList(); showToast('DEV: задание добавлено'); return; }
+    if (DEV_MODE) {
+      allTasks.unshift({ id: 'dev-' + Date.now(), text: text, points: points, active: true, type: type, limit: limit, day: day });
+      renderTaskList(); showToast('DEV: задание добавлено'); return;
+    }
     await db.collection('tasks').add({
       text: text,
       points: points,
       active: true,
+      type: type,
+      limit: limit,
+      day: day,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     showToast('Задание создано');
     await loadTasks();
+  } catch (err) {
+    showToast('Ошибка: ' + err.message, true);
+  }
+}
+
+/* ---------- Редактирование задания (модал) ---------- */
+let editTaskId = null;
+
+function openTaskEditor(id) {
+  const t = allTasks.find((x) => x.id === id);
+  if (!t) return;
+  editTaskId = id;
+  const type = t.type === 'repeat' ? 'repeat' : 'once';
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.id = 'edit-task-modal';
+  back.innerHTML =
+    '<div class="modal">' +
+    '<div class="field"><label>Текст задания</label>' +
+    '<input id="et-text" class="input" value="' + escapeHtml(t.text) + '"></div>' +
+    '<div class="row-actions" style="justify-content:flex-start;gap:8px;margin-bottom:12px">' +
+    '<div class="field" style="margin:0;width:100px"><label>Баллы</label>' +
+    '<input id="et-points" class="input" type="number" min="1" value="' + Number(t.points) + '"></div>' +
+    '<div class="field" style="margin:0;width:150px"><label>Тип</label>' +
+    '<select id="et-type" class="input"><option value="once"' + (type === 'once' ? ' selected' : '') + '>Обычное</option>' +
+    '<option value="repeat"' + (type === 'repeat' ? ' selected' : '') + '>Повторяемое</option></select></div>' +
+    '<div class="field" id="et-limit-wrap" style="margin:0;width:110px' + (type === 'repeat' ? '' : ';display:none') + '"><label>Лимит раз</label>' +
+    '<input id="et-limit" class="input" type="number" min="1" value="' + (t.limit || 3) + '"></div>' +
+    '</div>' +
+    '<div class="field"><label>День действия (пусто = всегда)</label>' +
+    '<input id="et-day" class="input" value="' + escapeHtml(t.day || '') + '" placeholder="Любой день · День 1 · 2026-08-15"></div>' +
+    '<label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="et-active"' + (t.active ? ' checked' : '') + '> Задание активно</label>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
+    '<button id="et-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
+    '<button id="et-save" class="btn" type="button">Сохранить</button>' +
+    '</div></div>';
+  document.body.appendChild(back);
+
+  back.querySelector('#et-cancel').addEventListener('click', () => back.remove());
+  back.querySelector('#et-save').addEventListener('click', saveTaskEdit);
+  back.querySelector('#et-type').addEventListener('change', (e) => {
+    document.getElementById('et-limit-wrap').style.display = e.target.value === 'repeat' ? 'block' : 'none';
+  });
+}
+
+async function saveTaskEdit() {
+  const text = document.getElementById('et-text').value.trim();
+  const points = Number(document.getElementById('et-points').value);
+  const type = document.getElementById('et-type').value;
+  const limit = type === 'repeat' ? Math.max(1, Number(document.getElementById('et-limit').value) || 1) : 1;
+  const day = document.getElementById('et-day').value.trim();
+  const active = document.getElementById('et-active').checked;
+  if (!text) { showToast('Введи текст задания', true); return; }
+  if (!points || points < 1) { showToast('Баллы ≥ 1', true); return; }
+  try {
+    if (DEV_MODE) {
+      const t = allTasks.find((x) => x.id === editTaskId);
+      if (t) Object.assign(t, { text: text, points: points, type: type, limit: limit, day: day, active: active });
+      renderTaskList();
+    } else {
+      await db.collection('tasks').doc(editTaskId).update({
+        text: text,
+        points: points,
+        type: type,
+        limit: limit,
+        day: day,
+        active: active,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    const modal = document.getElementById('edit-task-modal');
+    if (modal) modal.remove();
+    showToast('Задание сохранено');
+    loadTasks();
   } catch (err) {
     showToast('Ошибка: ' + err.message, true);
   }
@@ -589,13 +660,30 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   document.getElementById('btn-new-preset').addEventListener('click', newPreset);
   document.getElementById('btn-add-task').addEventListener('click', () => {
-    const text = document.getElementById('task-text').value.trim();
-    const points = Number(document.getElementById('task-points').value);
-    if (!text || !points || points < 1) { showToast('Введи текст и баллы (≥1)', true); return; }
-    createTask(text, points);
+    const raw = document.getElementById('task-text').value;
+    const defPoints = Number(document.getElementById('task-points').value);
+    const type = document.getElementById('task-type').value;
+    const limit = Number(document.getElementById('task-limit').value);
+    const day = document.getElementById('task-day').value;
+    const rows = parseTaskLines(raw, defPoints);
+    if (!rows.length) { showToast('Введи текст задания', true); return; }
+    if (rows.some((r) => !r.points || r.points < 1)) {
+      showToast('Баллы ≥ 1: задай поле «Баллы» или «| N» в строке', true);
+      return;
+    }
+    rows.forEach((r) => createTask(r.text, r.points, { type: type, limit: limit, day: day }));
     document.getElementById('task-text').value = '';
-    document.getElementById('task-points').value = '';
+    document.getElementById('task-day').value = '';
   });
+  const taskTypeEl = document.getElementById('task-type');
+  const taskLimitWrap = document.getElementById('task-limit-wrap');
+  if (taskTypeEl && taskLimitWrap) {
+    const toggleLimit = () => {
+      taskLimitWrap.style.display = taskTypeEl.value === 'repeat' ? 'block' : 'none';
+    };
+    taskTypeEl.addEventListener('change', toggleLimit);
+    toggleLimit();
+  }
   bindTaskFilter();
 
   document.getElementById('btn-add-all').addEventListener('click', addToAll);
@@ -615,6 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (pdel) { deletePresetById(pdel.dataset.pdel); return; }
     const del = e.target.closest('[data-del]');
     if (del && del.dataset.del) { deleteTask(del.dataset.del); return; }
+    const ed = e.target.closest('[data-ed]');
+    if (ed) { openTaskEditor(ed.dataset.ed); return; }
     const tog = e.target.closest('[data-tog]');
     if (tog) { toggleTask(tog.dataset.tog); return; }
     const pm = e.target.closest('[data-pm]');
