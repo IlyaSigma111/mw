@@ -8,6 +8,7 @@ const SELF_DOC_CACHE = 'mw_self_v1';   // кэш «я выполнял зада�
 const doneCache = JSON.parse(localStorage.getItem(SELF_DOC_CACHE) || '{}');
 
 let db, auth;
+let myVkId = '';   // VK ID участника (общий для всех устройств)
 
 /* ---------- Тосты ---------- */
 function showToast(text, isErr) {
@@ -44,8 +45,10 @@ async function init() {
       console.warn('DEV_MODE: Firebase пропущен, используется локальное хранилище.');
     }
 
-    // 3. Гарантируем документ пользователя (создаём при первом входе)
-    const myUid = DEV_MODE ? 'dev-user' : auth.currentUser.uid;
+    // 3. Документ участника привязан к VK ID, а не к uid устройства:
+    //    один аккаунт ВК = один профиль (баллы, выполненные задания) на всех устройствах.
+    const myUid = DEV_MODE ? 'dev-user' : 'vk_' + String(vk.id);
+    myVkId = DEV_MODE ? '' : String(vk.id);
     if (!DEV_MODE) await ensureUserDoc(myUid, vk);
 
     // 4. Рендер + подписки
@@ -70,7 +73,7 @@ async function init() {
 
 const DEFAULT_TASKS_EMPTY = [];
 
-/* Создать документ users/{uid} при первом входе (score: 0) */
+/* Создать документ users/vk_<VK ID> при первом входе (score: 0) */
 async function ensureUserDoc(uid, vk) {
   const ref = db.collection('users').doc(uid);
   const snap = await ref.get();
@@ -80,6 +83,7 @@ async function ensureUserDoc(uid, vk) {
       name: (vk.first_name + ' ' + vk.last_name).trim(),
       avatar: vk.photo_100 || '',
       score: 0,
+      done: [],
     });
   }
 }
@@ -130,7 +134,7 @@ function listenWithFallback(ref, onSnap, onErr, firstMs) {
   setInterval(() => { if (!got) poll(); }, 15000);
 }
 
-/* ---------- Баллы в реальном времени ---------- */
+/* ---------- Баллы + выполненные задания в реальном времени ---------- */
 function subscribeScore(uid) {
   listenWithFallback(
     db.collection('users').doc(uid),
@@ -138,6 +142,17 @@ function subscribeScore(uid) {
       if (snap.exists) {
         const d = snap.data();
         document.getElementById('score-num').textContent = d.score || 0;
+        // Синхронизируем «выполненные задания» с других устройств
+        if (Array.isArray(d.done)) {
+          let changed = false;
+          d.done.forEach((id) => {
+            if (!doneCache[id]) { doneCache[id] = true; changed = true; }
+          });
+          if (changed) {
+            localStorage.setItem(SELF_DOC_CACHE, JSON.stringify(doneCache));
+            if (lastTasks.length) renderTasks(lastTasks);
+          }
+        }
       }
     },
     () => showToast('Не удаётся обновить счёт', true)
@@ -292,9 +307,10 @@ async function doTask(task) {
       localStorage.setItem('mw_dev_score', String(cur));
       setScore(cur);
     } else {
-      const myUid = auth.currentUser.uid;
+      const myUid = 'vk_' + myVkId;
       await db.collection('users').doc(myUid).update({
         score: firebase.firestore.FieldValue.increment(task.points),
+        done: firebase.firestore.FieldValue.arrayUnion(task.id),
       });
     }
     doneCache[task.id] = true;               // задание больше не показываем
@@ -332,14 +348,13 @@ function seedDevData(uid, vk) {
 function renderRating(listOverride) {
   const wrap = document.getElementById('rating');
   const list = listOverride || ratingData;
-  const myUid = DEV_MODE ? 'dev-user' : (auth && auth.currentUser ? auth.currentUser.uid : '');
   if (!list.length) {
     wrap.innerHTML = '<div class="empty">Пока никого нет — стань первым!</div>';
     return;
   }
   wrap.innerHTML = list.map((u, i) => {
     const rankCls = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
-    const me = u.uid === myUid ? ' rate-me' : '';
+    const me = myVkId && String(u.vkId) === myVkId ? ' rate-me' : '';
     const avatar = u.avatar
       ? '<img class="rate-avatar" src="' + escapeHtml(u.avatar) + '" alt="">'
       : '<div class="rate-avatar">' + escapeHtml((u.name || '?')[0]) + '</div>';

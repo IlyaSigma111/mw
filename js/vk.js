@@ -5,13 +5,26 @@
    Bridge вызываем ТОЛЬКО внутри ВК (иначе send зависает).
    ============================================================ */
 
+/* Параметры запуска VK приходят и в query (?vk_user_id=...), и в hash (#vk_user_id=...) */
+function getLaunchParams() {
+  try {
+    const q = new URLSearchParams(location.search);
+    const h = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+    return {
+      has: (k) => q.has(k) || h.has(k),
+      get: (k) => q.get(k) || h.get(k),
+    };
+  } catch (err) {
+    return { has: () => false, get: () => null };
+  }
+}
+
 /* Находимся ли мы внутри ВК (iframe с launch-параметрами)? */
 const IS_VK = (function () {
   if (typeof window === 'undefined' || typeof location === 'undefined') return false;
   try {
-    const q = new URLSearchParams(location.search);
-    const hasVkParams = q.has('vk_user_id') || q.has('vk_app_id') ||
-      q.has('vk_profile_id') || q.has('vk_viewer_group_role') || q.has('sign');
+    const p = getLaunchParams();
+    const hasVkParams = ['vk_user_id', 'vk_app_id', 'vk_profile_id', 'vk_viewer_group_role', 'sign'].some(p.has);
     return hasVkParams || (window.parent && window.parent !== window);
   } catch (err) {
     return false;
@@ -33,7 +46,7 @@ function vkStubUser() {
 /* Пользователь из launch-параметров (vk_user_id в URL), если есть */
 function vkFromLaunchParams() {
   try {
-    const urlId = Number(new URLSearchParams(location.search).get('vk_user_id'));
+    const urlId = Number(getLaunchParams().get('vk_user_id'));
     if (urlId && !DEV_MODE) {
       return { id: urlId, first_name: 'Участник', last_name: '', photo_100: '' };
     }
