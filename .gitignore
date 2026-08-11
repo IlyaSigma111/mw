@@ -1,0 +1,5 @@
+.firebase/
+firebase-debug.log
+firebase.json
+firestore.rules
+.firebaserc

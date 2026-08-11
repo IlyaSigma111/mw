@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12121A">
+  <title>МедиаволнApp — админ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <!-- VK Bridge -->
+  <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+  <!-- Feather Icons -->
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+  <div id="toasts"></div>
+
+  <!-- Экран «Нет доступа» -->
+  <div id="gate" class="locked" style="display:none">
+    <i data-feather="lock"></i>
+    <h1>Нет доступа</h1>
+    <p>Эта страница доступна только организаторам слёта.</p>
+  </div>
+
+  <!-- Панель админа -->
+  <div id="panel" class="shell" style="display:none">
+    <header class="hdr rise" style="margin-bottom:20px">
+      <div id="admin-avatar" class="hdr-avatar">А</div>
+      <div class="hdr-name"><span id="admin-name">Администратор</span><small><span class="badge badge-admin">админ</span></small></div>
+    </header>
+
+    <!-- Вкладки -->
+    <nav class="tabs rise rise-1">
+      <button class="tab-btn" data-tab="schedule" type="button">Расписание</button>
+      <button class="tab-btn" data-tab="tasks" type="button">Задания</button>
+      <button class="tab-btn" data-tab="users" type="button">Участники</button>
+      <button class="tab-btn" data-tab="stats" type="button">Статистика</button>
+    </nav>
+
+    <!-- РАСПИСАНИЕ -->
+    <div class="tab-pane" data-pane="schedule">
+      <div class="sec-sub">Редактирование трёх дней слёта. Сохраняется в schedule/current — участники увидят после кнопки «Обновить» в приложении.</div>
+      <div id="sched-edit"></div>
+      <button id="btn-save-schedule" class="btn btn-block" type="button" style="margin-top:14px">Сохранить расписание</button>
+    </div>
+
+    <!-- ЗАДАНИЯ -->
+    <div class="tab-pane" data-pane="tasks" style="display:none">
+      <div class="card">
+        <div class="field"><label>Текст задания</label><input id="task-text" class="input" placeholder="Например: сделай фото заката"></div>
+        <div class="field"><label>Баллы</label><input id="task-points" class="input" type="number" min="1" value="5" placeholder="5"></div>
+        <button id="btn-add-task" class="btn btn-block" type="button">Создать задание</button>
+      </div>
+      <div class="row-actions" style="margin:14px 0">
+        <button class="btn btn-ghost btn-sm" data-filter="all" type="button">Все</button>
+        <button class="btn btn-ghost btn-sm" data-filter="active" type="button">Активные</button>
+        <button class="btn btn-ghost btn-sm" data-filter="inactive" type="button">Выключенные</button>
+      </div>
+      <div id="tasks-list"></div>
+    </div>
+
+    <!-- УЧАСТНИКИ -->
+    <div class="tab-pane" data-pane="users" style="display:none">
+      <div class="field">
+        <label>Поиск</label>
+        <input id="users-search" class="input" placeholder="Имя или VK ID">
+      </div>
+      <div class="row-actions" style="margin-bottom:12px">
+        <button id="btn-add-all" class="btn btn-warn btn-sm" type="button">+5 всем</button>
+        <button id="btn-reset-all" class="btn btn-danger btn-sm" type="button">Сбросить все баллы</button>
+      </div>
+      <div id="users-list"></div>
+    </div>
+
+    <!-- СТАТИСТИКА -->
+    <div class="tab-pane" data-pane="stats" style="display:none">
+      <div class="stat-grid">
+        <div class="stat"><b id="stat-users">0</b><span>Участников</span></div>
+        <div class="stat"><b id="stat-sum">0</b><span>Сумма баллов</span></div>
+        <div class="stat"><b id="stat-tasks">0</b><span>Активных заданий</span></div>
+        <div class="stat"><b id="stat-top3" style="font-size:16px">—</b><span>Топ-3</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/schedule.js"></script>
+  <script src="js/vk.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
