@@ -147,6 +147,7 @@ function renderSchedule() {
 /* Кнопка «Обновить» — единственное место, где участник читает schedule/current */
 async function refreshSchedule() {
   if (DEV_MODE) { showToast('DEV_MODE: расписание из кода'); return; }
+  if (!db) { showToast('Приложение ещё не готово, обнови страницу', true); return; }
   try {
     const snap = await db.collection('schedule').doc('current').get();
     if (snap.exists && Array.isArray(snap.data().days)) {
