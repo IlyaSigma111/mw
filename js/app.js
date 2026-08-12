@@ -8,6 +8,7 @@ const SELF_DOC_CACHE = 'mw_self_v1';   // кэш «я выполнял зада�
 const doneCache = JSON.parse(localStorage.getItem(SELF_DOC_CACHE) || '{}');
 
 let db, auth;
+let myUid = '';    // users/<uid> текущего участника
 let myVkId = '';   // VK ID участника (общий для всех устройств)
 
 /* ---------- Тосты ---------- */
@@ -47,9 +48,8 @@ async function init() {
 
     // 3. Документ участника привязан к VK ID, а не к uid устройства:
     //    один аккаунт ВК = один профиль (баллы, выполненные задания) на всех устройствах.
-    const myUid = DEV_MODE ? 'dev-user' : 'vk_' + String(vk.id);
-    myVkId = DEV_MODE ? '' : String(vk.id);
-    if (!DEV_MODE) await ensureUserDoc(myUid, vk);
+    myUid = DEV_MODE ? 'dev-user' : 'vk_' + String(vk.id);
+    myVkId = DEV_MODE ? '' : String(vk.id);    if (!DEV_MODE) await ensureUserDoc(myUid, vk);
 
     // 4. Рендер + подписки
     renderHeader(vk);
@@ -176,16 +176,19 @@ function setScore(n) {
 }
 
 /* ---------- Бейджи участника ---------- */
-let myBadges = [];          // [{id, name, caption, img}]
+let myBadges = [];          // [{id, name, caption, img}] — выданные мне
+let allBadges = [];         // все бейджи (для показа в рейтинге)
 let myBadgeIds = [];        // выданные мне id
+let myActiveBadge = null;   // id бейджа, который показываю в рейтинге
 
 function subscribeBadges(uid) {
   listenWithFallback(
     db.collection('badges'),
     (snap) => {
-      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      myBadges = all.filter((b) => myBadgeIds.includes(b.id));
+      allBadges = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      myBadges = allBadges.filter((b) => myBadgeIds.includes(b.id));
       renderBadges();
+      if (ratingData.length) throttleRenderRating();   // обновить бейджи в рейтинге
     },
     () => { /* молчим — бейджи не критичны */ }
   );
@@ -193,8 +196,10 @@ function subscribeBadges(uid) {
     db.collection('users').doc(uid),
     (snap) => {
       if (snap.exists) {
-        myBadgeIds = Array.isArray(snap.data().badges) ? snap.data().badges : [];
-        myBadges = myBadges.filter((b) => myBadgeIds.includes(b.id));
+        const d = snap.data();
+        myBadgeIds = Array.isArray(d.badges) ? d.badges : [];
+        myActiveBadge = d.activeBadge || null;
+        myBadges = allBadges.filter((b) => myBadgeIds.includes(b.id));
         renderBadges();
       }
     },
@@ -209,13 +214,41 @@ function renderBadges() {
     wrap.innerHTML = '<div class="empty">Пока пусто — бейджи вручает организатор за достижения.</div>';
     return;
   }
-  wrap.innerHTML = myBadges.map((b) =>
-    '<div class="card badge-card">' +
-    '<img class="badge-img" src="' + escapeHtml(b.img || '') + '" alt="">' +
-    '<div class="grow"><b>' + escapeHtml(b.name || 'Бейдж') + '</b>' +
-    '<small>' + escapeHtml(b.caption || '') + '</small></div>' +
-    '</div>'
-  ).join('');
+  wrap.innerHTML = myBadges.map((b) => {
+    const active = b.id === myActiveBadge;
+    return '<div class="card badge-card">' +
+      '<img class="badge-img" src="' + escapeHtml(b.img || '') + '" alt="">' +
+      '<div class="grow"><b>' + escapeHtml(b.name || 'Бейдж') + '</b>' +
+      '<small>' + escapeHtml(b.caption || '') + '</small>' +
+      '<button class="btn btn-sm ' + (active ? 'btn-badge-active' : 'btn-ghost') + '" data-activate="' + b.id + '" type="button">' +
+      (active ? 'Показывается в рейтинге' : 'Показывать в рейтинге') + '</button></div>' +
+      '</div>';
+  }).join('');
+  document.querySelectorAll('[data-activate]').forEach((btn) => {
+    btn.addEventListener('click', () => setActiveBadge(btn.dataset.activate));
+  });
+}
+
+/* Выбрать/снять бейдж, показываемый в рейтинге (хранится в users/{uid}.activeBadge) */
+async function setActiveBadge(id) {
+  if (DEV_MODE) {
+    myActiveBadge = myActiveBadge === id ? null : id;
+    renderBadges();
+    renderRating();
+    return;
+  }
+  try {
+    const ref = db.collection('users').doc(myUid);
+    if (myActiveBadge === id) {
+      await ref.update({ activeBadge: firebase.firestore.FieldValue.delete() });
+    } else {
+      await ref.update({ activeBadge: id });
+    }
+    vkFeedback('success');
+    showToast(myActiveBadge === id ? 'Бейдж убран из рейтинга' : 'Бейдж показывается в рейтинге');
+  } catch (err) {
+    showToast('Не удалось: ' + err.message, true);
+  }
 }
 
 /* ---------- Расписание ---------- */
@@ -519,6 +552,8 @@ function seedDevData(uid, vk) {
   myBadges = [
     { id: 'dev-b1', name: 'DEV-бейдж', caption: 'Пример бейджа для теста', img: '' },
   ];
+  allBadges = myBadges.slice();
+  myActiveBadge = null;
   renderBadges();
 }
 
@@ -535,11 +570,15 @@ function renderRating(listOverride) {
     const avatar = u.avatar
       ? '<img class="rate-avatar" src="' + escapeHtml(u.avatar) + '" alt="">'
       : '<div class="rate-avatar">' + escapeHtml((u.name || '?')[0]) + '</div>';
+    const badge = u.activeBadge ? allBadges.find((b) => b.id === u.activeBadge) : null;
     return (
       '<div class="rate-row' + me + '">' +
       '<div class="rate-rank ' + rankCls + '">' + (i + 1) + '</div>' +
       avatar +
-      '<div class="rate-name">' + escapeHtml(u.name || 'Без имени') + '</div>' +
+      '<div class="rate-name">' +
+      '<span class="rate-name-text">' + escapeHtml(u.name || 'Без имени') + '</span>' +
+      (badge ? '<img class="rate-badge" src="' + escapeHtml(badge.img || '') + '" title="' + escapeHtml(badge.name || '') + '" alt="">' : '') +
+      '</div>' +
       '<div class="rate-pts">' + (u.score || 0) + '</div>' +
       '</div>'
     );
