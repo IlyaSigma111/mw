@@ -218,7 +218,11 @@ export async function runBot(env) {
     const discovered = await discoverPeers(VK_TOKEN, null);
     const cached = (cfgSnap.exists && cfgSnap.data().peers) || [];
     peers = [...new Set([...discovered, ...cached])];
-    await cfgRef.set({ peers, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    const same = JSON.stringify([...peers].sort()) === JSON.stringify([...(cached || [])].sort());
+    if (!same) {
+      await cfgRef.set({ peers, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      console.log(`peers changed: ${peers.join(', ')}`);
+    }
   }
   console.log(`peers: ${peers.join(', ')}`);
 
