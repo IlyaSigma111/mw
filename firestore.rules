@@ -36,6 +36,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ---------- Бейджи ----------
+    // Картинка хранится сжатым dataURL внутри документа (лимит 1 МБ).
+    // Выдача участнику — массив id в users/{userId}.badges.
+    match /badges/{doc} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
     // ---------- Конфиг ----------
     // Список админов (VK ID) — только чтение, изменение только из консоли Firebase.
     match /config/admins {

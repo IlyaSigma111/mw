@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=3">
+  <link rel="stylesheet" href="css/styles.css?v=4">
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -45,6 +45,7 @@
     <nav class="tabs rise rise-1">
       <button class="tab-btn" data-tab="schedule" type="button">Расписание</button>
       <button class="tab-btn" data-tab="tasks" type="button">Задания</button>
+      <button class="tab-btn" data-tab="badges" type="button">Бейджи</button>
       <button class="tab-btn" data-tab="users" type="button">Участники</button>
       <button class="tab-btn" data-tab="stats" type="button">Статистика</button>
     </nav>
@@ -85,6 +86,32 @@
       <div id="tasks-list"></div>
     </div>
 
+    <!-- БЕЙДЖИ -->
+    <div class="tab-pane" data-pane="badges" style="display:none">
+      <div class="card">
+        <div class="field">
+          <label>Картинка бейджа</label>
+          <div class="badge-upload">
+            <img id="badge-preview" class="badge-upload-prev" style="display:none" alt="">
+            <div class="badge-upload-box">
+              <input id="badge-file" class="input" type="file" accept="image/*">
+              <div class="sec-sub" style="margin:8px 0 0">PNG/JPG · будет сжата и сохранена в базе</div>
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>Название</label>
+          <input id="badge-name" class="input" placeholder="Например: Лучший организатор"></div>
+        <div class="field"><label>Подпись (описание)</label>
+          <input id="badge-caption" class="input" placeholder="Короткое описание, за что вручён"></div>
+        <button id="btn-add-badge" class="btn btn-block" type="button">Создать бейдж</button>
+      </div>
+      <div class="row-actions" style="margin:14px 0">
+        <button class="btn btn-ghost btn-sm" data-bfilter="all" type="button">Все</button>
+        <button class="btn btn-ghost btn-sm" data-bfilter="given" type="button">Выданные</button>
+      </div>
+      <div id="badges-list"></div>
+    </div>
+
     <!-- УЧАСТНИКИ -->
     <div class="tab-pane" data-pane="users" style="display:none">
       <div class="field">
@@ -109,9 +136,9 @@
     </div>
   </div>
 
-  <script src="js/firebase-config.js?v=3"></script>
-  <script src="js/schedule.js?v=3"></script>
-  <script src="js/vk.js?v=3"></script>
-  <script src="js/admin.js?v=3"></script>
+  <script src="js/firebase-config.js?v=4"></script>
+  <script src="js/schedule.js?v=4"></script>
+  <script src="js/vk.js?v=4"></script>
+  <script src="js/admin.js?v=4"></script>
 </body>
 </html>

@@ -307,6 +307,45 @@ body {
 .switch input:checked + .slider { background: var(--accent); border-color: var(--accent); box-shadow: var(--glow); }
 .switch input:checked + .slider::before { transform: translateX(18px); background: #001A00; }
 
+/* ---------- Настройки (локальные) ---------- */
+.set-row { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 2px 0; }
+.set-row + .set-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.set-row .grow { flex: 1; min-width: 0; }
+.set-row .grow b { font-size: 14px; }
+.set-row .grow small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.sw {
+  position: relative; width: 46px; height: 27px; flex-shrink: 0;
+  background: var(--card-2); border: 1px solid var(--line); border-radius: 999px;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.sw i {
+  position: absolute; left: 2px; top: 2px; width: 21px; height: 21px;
+  background: var(--muted); border-radius: 50%;
+  transition: transform 0.2s var(--ease), background 0.2s;
+}
+.sw.on { background: var(--accent); border-color: var(--accent); box-shadow: var(--glow); }
+.sw.on i { transform: translateX(19px); background: #001A00; }
+
+/* ---------- Бейджи ---------- */
+.badge-upload { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.badge-upload-prev {
+  width: 64px; height: 64px; border-radius: 14px;
+  border: 1px solid var(--line); object-fit: cover; flex-shrink: 0;
+}
+.badge-upload-box { flex: 1; min-width: 0; }
+.badge-thumb {
+  width: 40px; height: 40px; border-radius: 10px;
+  border: 1px solid var(--line-green); object-fit: cover; flex-shrink: 0;
+}
+.badge-card { display: flex; align-items: center; gap: 14px; }
+.badge-card .badge-img {
+  width: 56px; height: 56px; border-radius: 14px;
+  border: 1px solid var(--line-green); object-fit: cover; flex-shrink: 0;
+  box-shadow: var(--glow);
+}
+.badge-card .grow b { font-size: 15px; }
+.badge-card .grow small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+
 /* ---------- Бейджи ---------- */
 .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
 .badge-on { background: rgba(0,255,65,0.18); color: var(--accent); }

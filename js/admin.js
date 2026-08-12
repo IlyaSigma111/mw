@@ -76,7 +76,7 @@ async function initAdmin() {
 
     showAdmin(true, vk);
     bindTabs();
-    await Promise.all([loadUsers(), loadTasks()]);
+    await Promise.all([loadUsers(), loadTasks(), loadBadges()]);
     loadSchedulePanel();
     renderStats();
     switchTab('schedule');
@@ -533,6 +533,205 @@ async function deleteTask(id) {
 }
 
 /* ============================================================
+   БЕЙДЖИ — конструктор + выдача
+   Бейдж: { name, caption, img (dataURL), createdAt } в badges/{id}.
+   Выдача: массив id в users/{uid}.badges.
+   ============================================================ */
+let badgesCache = [];       // [{id, name, caption, img}]
+let badgeFilter = 'all';
+
+async function loadBadges() {
+  try {
+    if (DEV_MODE) {
+      const raw = localStorage.getItem('mw_dev_badges');
+      badgesCache = raw ? JSON.parse(raw) : [];
+      renderBadges();
+      return;
+    }
+    const snap = await db.collection('badges').get();
+    badgesCache = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderBadges();
+  } catch (err) {
+    showToast('Не удалось загрузить бейджи: ' + err.message, true);
+  }
+}
+
+function badgeGivenCount(id) {
+  return usersCache.filter((u) => Array.isArray(u.badges) && u.badges.includes(id)).length;
+}
+
+function renderBadges() {
+  const list = badgesCache.filter((b) => {
+    if (badgeFilter === 'given') return badgeGivenCount(b.id) > 0;
+    return true;
+  });
+  const wrap = document.getElementById('badges-list');
+  if (!list.length) {
+    wrap.innerHTML = '<div class="empty">Бейджей пока нет — создай первый выше.</div>';
+    if (window.feather) feather.replace();
+    return;
+  }
+  wrap.innerHTML = list.map((b) =>
+    '<div class="row-item">' +
+    '<img class="badge-thumb" src="' + escapeHtml(b.img || '') + '" alt="">' +
+    '<div class="grow"><b>' + escapeHtml(b.name || 'Без названия') + '</b>' +
+    '<small>' + escapeHtml(b.caption || '') + ' · выдано: ' + badgeGivenCount(b.id) + '</small></div>' +
+    '<div class="row-actions">' +
+    '<button class="btn btn-sm" data-bgive="' + b.id + '" type="button">Выдать</button>' +
+    '<button class="btn btn-danger btn-sm" data-bdel="' + b.id + '" type="button"><i data-feather="trash-2"></i></button>' +
+    '</div></div>'
+  ).join('');
+  if (window.feather) feather.replace();
+}
+
+/* Сжатие картинки в квадратный dataURL (максимум 256px) — чтобы влезать в лимит 1 МБ */
+function fileToBadgeData(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const s = Math.min(img.width, img.height);
+        ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => reject(new Error('Не удалось прочитать картинку'));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function createBadge() {
+  const name = document.getElementById('badge-name').value.trim();
+  const caption = document.getElementById('badge-caption').value.trim();
+  const file = document.getElementById('badge-file').files[0];
+  if (!name) { showToast('Введи название бейджа', true); return; }
+  if (!file) { showToast('Выбери картинку', true); return; }
+  try {
+    const img = await fileToBadgeData(file);
+    if (DEV_MODE) {
+      const b = { id: 'dev-b' + Date.now(), name: name, caption: caption, img: img };
+      badgesCache.unshift(b);
+      localStorage.setItem('mw_dev_badges', JSON.stringify(badgesCache));
+      renderBadges();
+      showToast('DEV: бейдж создан');
+      return;
+    }
+    await db.collection('badges').add({
+      name: name,
+      caption: caption,
+      img: img,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showToast('Бейдж создан');
+    await loadBadges();
+  } catch (err) {
+    showToast('Ошибка: ' + err.message, true);
+  }
+}
+
+async function deleteBadge(id) {
+  const ok = await confirmDialog('Удалить бейдж? Он исчезнет у всех, кому был выдан.');
+  if (!ok) return;
+  try {
+    if (DEV_MODE) {
+      badgesCache = badgesCache.filter((b) => b.id !== id);
+      localStorage.setItem('mw_dev_badges', JSON.stringify(badgesCache));
+      renderBadges();
+      return;
+    }
+    await db.collection('badges').doc(id).delete();
+    await loadBadges();
+    showToast('Бейдж удалён');
+  } catch (err) {
+    showToast('Ошибка: ' + err.message, true);
+  }
+}
+
+/* ---------- Выдача бейджа (модал: выбор участника) ---------- */
+function openBadgeGive(id) {
+  const badge = badgesCache.find((b) => b.id === id);
+  if (!badge) return;
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.innerHTML =
+    '<div class="modal">' +
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">' +
+    '<img class="badge-thumb" src="' + escapeHtml(badge.img || '') + '" alt="">' +
+    '<div><b>' + escapeHtml(badge.name) + '</b><div class="sec-sub" style="margin:2px 0 0">Кому вручить?</div></div>' +
+    '</div>' +
+    '<input id="bgive-search" class="input" placeholder="Поиск по имени или VK ID" style="margin-bottom:12px">' +
+    '<div id="bgive-list" style="max-height:280px;overflow:auto"></div>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">' +
+    '<button class="btn btn-ghost" data-bclose="1" type="button">Готово</button>' +
+    '</div></div>';
+  document.body.appendChild(back);
+  back.addEventListener('click', (e) => {
+    if (e.target.closest('[data-bclose]')) { back.remove(); return; }
+    const row = e.target.closest('[data-brow]');
+    if (row) { toggleBadgeUser(id, row.dataset.brow); return; }
+  });
+  const render = () => {
+    const q = (document.getElementById('bgive-search').value || '').trim().toLowerCase();
+    const list = usersCache.filter((u) =>
+      !q || String(u.name || '').toLowerCase().includes(q) || String(u.vkId || '').includes(q));
+    const box = document.getElementById('bgive-list');
+    box.innerHTML = list.length
+      ? list.map((u) => {
+        const has = Array.isArray(u.badges) && u.badges.includes(id);
+        return '<div class="row-item" data-brow="' + u.uid + '" style="cursor:pointer">' +
+          '<div class="grow"><b>' + escapeHtml(u.name || 'Без имени') + '</b>' +
+          '<small>VK ID: ' + escapeHtml(String(u.vkId || '—')) + '</small></div>' +
+          '<span class="badge ' + (has ? 'badge-on' : 'badge-off') + '">' + (has ? 'выдан' : 'выдать') + '</span>' +
+          '</div>';
+      }).join('')
+      : '<div class="empty">Никого не нашлось</div>';
+  };
+  back.querySelector('#bgive-search').addEventListener('input', render);
+  render();
+}
+
+async function toggleBadgeUser(badgeId, uid) {
+  const u = usersCache.find((x) => x.uid === uid);
+  if (!u) return;
+  const has = Array.isArray(u.badges) && u.badges.includes(badgeId);
+  try {
+    if (DEV_MODE) {
+      u.badges = has
+        ? (u.badges || []).filter((b) => b !== badgeId)
+        : [].concat(u.badges || [], badgeId);
+      renderUsers();
+      return;
+    }
+    await db.collection('users').doc(uid).update({
+      badges: has
+        ? firebase.firestore.FieldValue.arrayRemove(badgeId)
+        : firebase.firestore.FieldValue.arrayUnion(badgeId),
+    });
+    await Promise.all([loadUsers(), loadBadges()]);
+    showToast(has ? 'Бейдж отозван' : 'Бейдж выдан: ' + (u.name || uid));
+  } catch (err) {
+    showToast('Ошибка: ' + err.message, true);
+  }
+}
+
+function bindBadgeFilter() {
+  document.querySelectorAll('[data-bfilter]').forEach((b) =>
+    b.addEventListener('click', () => {
+      badgeFilter = b.dataset.bfilter;
+      document.querySelectorAll('[data-bfilter]').forEach((x) => x.classList.toggle('on', x === b));
+      renderBadges();
+    }));
+}
+
+/* ============================================================
    УЧАСТНИКИ
    ============================================================ */
 async function loadUsers() {
@@ -685,6 +884,21 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleLimit();
   }
   bindTaskFilter();
+  bindBadgeFilter();
+
+  document.getElementById('btn-add-badge').addEventListener('click', createBadge);
+  const badgeFile = document.getElementById('badge-file');
+  if (badgeFile) {
+    badgeFile.addEventListener('change', () => {
+      const prev = document.getElementById('badge-preview');
+      if (badgeFile.files && badgeFile.files[0]) {
+        prev.src = URL.createObjectURL(badgeFile.files[0]);
+        prev.style.display = 'block';
+      } else {
+        prev.style.display = 'none';
+      }
+    });
+  }
 
   document.getElementById('btn-add-all').addEventListener('click', addToAll);
   document.getElementById('btn-reset-all').addEventListener('click', resetAllScores);
@@ -707,6 +921,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (ed) { openTaskEditor(ed.dataset.ed); return; }
     const tog = e.target.closest('[data-tog]');
     if (tog) { toggleTask(tog.dataset.tog); return; }
+    const bgive = e.target.closest('[data-bgive]');
+    if (bgive) { openBadgeGive(bgive.dataset.bgive); return; }
+    const bdel = e.target.closest('[data-bdel]');
+    if (bdel) { deleteBadge(bdel.dataset.bdel); return; }
     const pm = e.target.closest('[data-pm]');
     if (pm) { changeUserScore(pm.dataset.pm, -1); return; }
     const pp = e.target.closest('[data-pp]');

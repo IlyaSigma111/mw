@@ -63,6 +63,7 @@ async function init() {
       subscribeScore(myUid);
       subscribeRating();
       subscribeTasks(myUid);
+      subscribeBadges(myUid);
     }
     maybeShowAdminBtn(vk);
   } catch (err) {
@@ -114,17 +115,17 @@ function escapeHtml(s) {
   }[c]));
 }
 
-/* Кнопка «Админ» в докбаре: показываем только организаторам (VK ID из config/admins) */
+/* Кнопка «Админ» в настройках: показываем только организаторам (VK ID из config/admins) */
 async function maybeShowAdminBtn(vk) {
-  const btn = document.getElementById('dock-admin');
-  if (!btn) return;
-  if (DEV_MODE) { btn.style.display = 'flex'; return; }
+  const entry = document.getElementById('admin-entry');
+  if (!entry) return;
+  if (DEV_MODE) { entry.style.display = 'block'; return; }
   try {
     const snap = await db.collection('config').doc('admins').get();
     const ids = snap.exists && Array.isArray(snap.data().ids)
       ? snap.data().ids.map(String)
       : [];
-    if (ids.includes(String(vk.id))) btn.style.display = 'flex';
+    if (ids.includes(String(vk.id))) entry.style.display = 'block';
   } catch (err) { /* молчим — кнопка просто не покажется */ }
 }
 
@@ -172,6 +173,49 @@ function subscribeScore(uid) {
 
 function setScore(n) {
   document.getElementById('score-num').textContent = n;
+}
+
+/* ---------- Бейджи участника ---------- */
+let myBadges = [];          // [{id, name, caption, img}]
+let myBadgeIds = [];        // выданные мне id
+
+function subscribeBadges(uid) {
+  listenWithFallback(
+    db.collection('badges'),
+    (snap) => {
+      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      myBadges = all.filter((b) => myBadgeIds.includes(b.id));
+      renderBadges();
+    },
+    () => { /* молчим — бейджи не критичны */ }
+  );
+  listenWithFallback(
+    db.collection('users').doc(uid),
+    (snap) => {
+      if (snap.exists) {
+        myBadgeIds = Array.isArray(snap.data().badges) ? snap.data().badges : [];
+        myBadges = myBadges.filter((b) => myBadgeIds.includes(b.id));
+        renderBadges();
+      }
+    },
+    () => { /* молчим */ }
+  );
+}
+
+function renderBadges() {
+  const wrap = document.getElementById('badges');
+  if (!wrap) return;
+  if (!myBadges.length) {
+    wrap.innerHTML = '<div class="empty">Пока пусто — бейджи вручает организатор за достижения.</div>';
+    return;
+  }
+  wrap.innerHTML = myBadges.map((b) =>
+    '<div class="card badge-card">' +
+    '<img class="badge-img" src="' + escapeHtml(b.img || '') + '" alt="">' +
+    '<div class="grow"><b>' + escapeHtml(b.name || 'Бейдж') + '</b>' +
+    '<small>' + escapeHtml(b.caption || '') + '</small></div>' +
+    '</div>'
+  ).join('');
 }
 
 /* ---------- Расписание ---------- */
@@ -379,7 +423,7 @@ function renderTasks(list) {
 async function doTask(task) {
   const lim = taskLimit(task);
   const next = taskCount(task) + 1;
-  if (next > lim) { showToast('Лимит выполнений исчерпан', true); return; }
+  if (next > lim) { showToast('Лимит выполнений исчерпан', true); vkFeedback('error'); return; }
   try {
     if (DEV_MODE) {
       const cur = Number(localStorage.getItem('mw_dev_score') || 0) + task.points;
@@ -396,6 +440,7 @@ async function doTask(task) {
     localStorage.setItem(SELF_DOC_CACHE, JSON.stringify(doneCache));
     renderTasks(lastTasks);                  // обновить счётчик/скрыть сразу
     vkToast('+' + task.points + ' баллов!');
+    vkFeedback('success');
     showToast('Задание выполнено: +' + task.points + ' баллов' + (next < lim ? ' (' + next + '/' + lim + ')' : ''));
   } catch (err) {
     showToast('Не удалось выполнить: ' + err.message, true);
@@ -407,12 +452,57 @@ function initDock() {
   document.querySelectorAll('.dock-item').forEach((btn) => {
     btn.addEventListener('click', () => {
       const tab = btn.dataset.tab;
-      if (tab === 'admin') {
-        location.href = 'admin.html' + location.search;
-        return;
-      }
+      vkFeedback('click');
       document.querySelectorAll('.dock-item').forEach((b) => b.classList.toggle('on', b === btn));
       document.querySelectorAll('.app-pane').forEach((p) => p.classList.toggle('active', p.dataset.tab === tab));
+    });
+  });
+}
+
+/* ---------- Настройки (локально, без БД) ---------- */
+const SETTINGS_KEY = 'mw_settings_v1';
+const DEFAULT_SETTINGS = { vibe: true, sound: true };
+
+function getSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(raw));
+  } catch (e) { /* ignore */ }
+  return Object.assign({}, DEFAULT_SETTINGS);
+}
+
+function saveSettings(s) {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
+}
+
+/* Тактильный отклик + звук с учётом настроек. Вне ВК работает только звук. */
+function vkFeedback(kind) {
+  const s = getSettings();
+  if (kind === 'click') {
+    if (s.vibe) vkTapticImpact('light');
+    if (s.sound) vkSound('click');
+    return;
+  }
+  if (s.vibe) vkTaptic(kind);
+  if (s.sound) vkSound(kind);
+}
+
+function renderSettings() {
+  const s = getSettings();
+  document.querySelectorAll('[data-set]').forEach((el) => {
+    el.classList.toggle('on', !!s[el.dataset.set]);
+  });
+}
+
+function bindSettings() {
+  document.querySelectorAll('[data-set]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const key = el.dataset.set;
+      const s = getSettings();
+      s[key] = !s[key];
+      saveSettings(s);
+      renderSettings();
+      vkFeedback('success');
     });
   });
 }
@@ -426,6 +516,10 @@ function seedDevData(uid, vk) {
     { id: 'dev-1', text: 'Сделай фото заката и покажи соседу', points: 5 },
     { id: 'dev-2', text: 'Найди участника из другого города', points: 10 },
   ]);
+  myBadges = [
+    { id: 'dev-b1', name: 'DEV-бейдж', caption: 'Пример бейджа для теста', img: '' },
+  ];
+  renderBadges();
 }
 
 function renderRating(listOverride) {
@@ -454,6 +548,15 @@ function renderRating(listOverride) {
 
 /* ---------- Запуск ---------- */
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('sched-refresh').addEventListener('click', refreshSchedule);
+  document.getElementById('sched-refresh').addEventListener('click', () => {
+    vkFeedback('click');
+    refreshSchedule();
+  });
+  const adminBtn = document.getElementById('btn-admin-open');
+  if (adminBtn) {
+    adminBtn.addEventListener('click', () => { location.href = 'admin.html' + location.search; });
+  }
   init();
+  renderSettings();
+  bindSettings();
 });

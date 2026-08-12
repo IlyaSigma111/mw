@@ -99,3 +99,48 @@ function vkToast(text) {
   if (DEV_MODE || !BRIDGE) return;
   BRIDGE.send('VKWebAppShowToast', { text }).catch(() => {});
 }
+
+/* ---------- Тактильные отклики (taptic) ----------
+   Работают только в приложении ВК на телефоне. Вне ВК тихо игнорируем. */
+function vkTaptic(type) {
+  if (DEV_MODE || !BRIDGE) return;
+  BRIDGE.send('VKWebAppTapticNotificationOccurred', { type }).catch(() => {});
+}
+
+function vkTapticImpact(style) {
+  if (DEV_MODE || !BRIDGE) return;
+  BRIDGE.send('VKWebAppTapticImpactOccurred', { style }).catch(() => {});
+}
+
+/* ---------- Короткие синтезированные звуки (WebAudio, без файлов) ----------
+   AudioContext создаём лениво после первого жеста — иначе iOS блокирует. */
+let audioCtx = null;
+
+function beep(freq, dur, vol) {
+  try {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol, audioCtx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + dur + 0.05);
+  } catch (e) { /* игнорируем */ }
+}
+
+function vkSound(kind) {
+  if (kind === 'success') beep(880, 0.14, 0.06);
+  else if (kind === 'error') beep(220, 0.25, 0.07);
+  else if (kind === 'click') beep(620, 0.06, 0.04);
+  else if (kind === 'warning') beep(520, 0.18, 0.05);
+}

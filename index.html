@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=3">
+  <link rel="stylesheet" href="css/styles.css?v=4">
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -67,9 +67,43 @@
         <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
       </div>
     </section>
+
+    <!-- БЕЙДЖИ -->
+    <section class="sec tab-pane app-pane rise rise-4" data-tab="badges">
+      <div class="sec-head">
+        <i data-feather="star"></i>
+        <h2>Мои бейджи</h2>
+      </div>
+      <div class="sec-sub">Награды за достижения на слёте</div>
+      <div id="badges"><div class="skel h18"></div></div>
+    </section>
+
+    <!-- НАСТРОЙКИ (локально, без БД) -->
+    <section class="sec tab-pane app-pane rise rise-5" data-tab="settings">
+      <div class="sec-head">
+        <i data-feather="settings"></i>
+        <h2>Настройки</h2>
+      </div>
+      <div class="sec-sub">Хранятся на устройстве · вибрация работает в приложении ВК на телефоне</div>
+      <div class="card">
+        <div class="set-row" data-set="vibe" role="button" tabindex="0">
+          <div class="grow"><b>Вибрация</b><small>тактильный отклик на действия</small></div>
+          <div class="sw"><i></i></div>
+        </div>
+        <div class="set-row" data-set="sound" role="button" tabindex="0">
+          <div class="grow"><b>Звук</b><small>короткие сигналы на события</small></div>
+          <div class="sw"><i></i></div>
+        </div>
+      </div>
+      <div class="card" id="admin-entry" style="display:none">
+        <button id="btn-admin-open" class="btn btn-ghost btn-block" type="button">
+          <i data-feather="sliders"></i> Панель администратора
+        </button>
+      </div>
+    </section>
   </div>
 
-  <!-- Докбар: Расписание · Задания · Рейтинг -->
+  <!-- Докбар: Расписание · Задания · Рейтинг · Настройки -->
   <nav class="dock">
     <button class="dock-item on" data-tab="schedule" type="button">
       <i data-feather="calendar"></i><span>Расписание</span>
@@ -80,15 +114,18 @@
     <button class="dock-item" data-tab="rating" type="button">
       <i data-feather="award"></i><span>Рейтинг</span>
     </button>
-    <button class="dock-item" id="dock-admin" data-tab="admin" type="button" style="display:none" title="Админ-панель">
-      <i data-feather="settings"></i><span>Админ</span>
+    <button class="dock-item" data-tab="badges" type="button">
+      <i data-feather="star"></i><span>Бейджи</span>
+    </button>
+    <button class="dock-item" data-tab="settings" type="button">
+      <i data-feather="settings"></i><span>Настройки</span>
     </button>
   </nav>
 
-  <script src="js/firebase-config.js?v=3"></script>
-  <script src="js/schedule.js?v=3"></script>
-  <script src="js/vk.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/firebase-config.js?v=4"></script>
+  <script src="js/schedule.js?v=4"></script>
+  <script src="js/vk.js?v=4"></script>
+  <script src="js/app.js?v=4"></script>
   <script>
     /* Вход в админку по deep-link: ...vk.com/app54716297#admin */
     (function () {
