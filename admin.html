@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=11">
+  <link rel="stylesheet" href="css/styles.css?v=16">
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -75,6 +75,7 @@
         </div>
         <div class="field"><label>День действия (пусто = всегда)</label>
           <input id="task-day" class="input" placeholder="Любой день · День 1 · 2026-08-15"></div>
+        <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="task-photo"> Требовать фото от участника (кнопка 📷)</label>
         <button id="btn-add-task" class="btn btn-block" type="button">Создать задание(я)</button>
       </div>
       <div class="row-actions" style="margin:14px 0">
@@ -109,9 +110,9 @@
     </div>
   </div>
 
-  <script src="js/firebase-config.js?v=11"></script>
-  <script src="js/schedule.js?v=11"></script>
-  <script src="js/vk.js?v=11"></script>
-  <script src="js/admin.js?v=11"></script>
+  <script src="js/firebase-config.js?v=16"></script>
+  <script src="js/schedule.js?v=16"></script>
+  <script src="js/vk.js?v=16"></script>
+  <script src="js/admin.js?v=16"></script>
 </body>
 </html>

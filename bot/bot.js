@@ -94,13 +94,20 @@ async function discoverPeers(token, configured) {
 
 async function sendSubmission(env, db, bucket, snap, peers) {
   const sub = snap.data();
-  if (!sub.photoPath) {
+  let buf = null;
+  let filename = 'photo.jpg';
+  if (sub.photoB64) {
+    buf = Buffer.from(sub.photoB64, 'base64');
+  } else if (sub.photoPath) {
+    [buf] = await bucket.file(sub.photoPath).download();
+    filename = sub.photoPath.split('/').pop() || 'photo.jpg';
+  }
+  if (!buf) {
     await snap.ref.update({ sent: true, skipped: true, sentAt: FieldValue.serverTimestamp() });
     console.log(`skip ${snap.id} (no photo)`);
     return;
   }
-  const [buf] = await bucket.file(sub.photoPath).download();
-  const attachment = await uploadPhotoToPeer(env.VK_TOKEN, env.VK_GROUP_ID, peers[0], buf, sub.photoPath.split('/').pop() || 'photo.jpg');
+  const attachment = await uploadPhotoToPeer(env.VK_TOKEN, env.VK_GROUP_ID, peers[0], buf, filename);
   const msgIds = {};
   for (const peer of peers) {
     const sent = await vkApi(env.VK_TOKEN, 'messages.send', {

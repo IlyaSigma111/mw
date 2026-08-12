@@ -375,6 +375,7 @@ async function syncTasksAggregate() {
         type: t.type === 'repeat' ? 'repeat' : 'once',
         limit: Math.max(1, Number(t.limit) || 1),
         day: String(t.day || ''),
+        withPhoto: !!t.withPhoto,
       })),
     });
   } catch (e) {
@@ -387,6 +388,7 @@ function taskMeta(t) {
   const bits = [];
   if (t.type === 'repeat') bits.push('повтор · до ' + Math.max(1, t.limit || 3) + ' раз');
   if (t.day && String(t.day).trim()) bits.push('день: ' + escapeHtml(t.day));
+  if (t.withPhoto) bits.push('📷 фото');
   return bits.length ? ' · ' + bits.join(' · ') : '';
 }
 
@@ -437,9 +439,10 @@ async function createTask(text, points, opts) {
   const type = opts.type === 'repeat' ? 'repeat' : 'once';
   const limit = type === 'repeat' ? Math.max(1, Number(opts.limit) || 1) : 1;
   const day = String(opts.day || '').trim();
+  const withPhoto = !!opts.withPhoto;
   try {
     if (DEV_MODE) {
-      allTasks.unshift({ id: 'dev-' + Date.now(), text: text, points: points, active: true, type: type, limit: limit, day: day });
+      allTasks.unshift({ id: 'dev-' + Date.now(), text: text, points: points, active: true, type: type, limit: limit, day: day, withPhoto: withPhoto });
       renderTaskList(); showToast('DEV: задание добавлено'); return;
     }
     await db.collection('tasks').add({
@@ -449,6 +452,7 @@ async function createTask(text, points, opts) {
       type: type,
       limit: limit,
       day: day,
+      withPhoto: withPhoto,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     showToast('Задание создано');
@@ -485,6 +489,7 @@ function openTaskEditor(id) {
     '<div class="field"><label>День действия (пусто = всегда)</label>' +
     '<input id="et-day" class="input" value="' + escapeHtml(t.day || '') + '" placeholder="Любой день · День 1 · 2026-08-15"></div>' +
     '<label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="et-active"' + (t.active ? ' checked' : '') + '> Задание активно</label>' +
+    '<label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="et-photo"' + (t.withPhoto ? ' checked' : '') + '> Требовать фото от участника (кнопка 📷)</label>' +
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
     '<button id="et-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
     '<button id="et-save" class="btn" type="button">Сохранить</button>' +
@@ -505,12 +510,13 @@ async function saveTaskEdit() {
   const limit = type === 'repeat' ? Math.max(1, Number(document.getElementById('et-limit').value) || 1) : 1;
   const day = document.getElementById('et-day').value.trim();
   const active = document.getElementById('et-active').checked;
+  const withPhoto = document.getElementById('et-photo').checked;
   if (!text) { showToast('Введи текст задания', true); return; }
   if (!points || points < 1) { showToast('Баллы ≥ 1', true); return; }
   try {
     if (DEV_MODE) {
       const t = allTasks.find((x) => x.id === editTaskId);
-      if (t) Object.assign(t, { text: text, points: points, type: type, limit: limit, day: day, active: active });
+      if (t) Object.assign(t, { text: text, points: points, type: type, limit: limit, day: day, active: active, withPhoto: withPhoto });
       renderTaskList();
     } else {
       await db.collection('tasks').doc(editTaskId).update({
@@ -520,6 +526,7 @@ async function saveTaskEdit() {
         limit: limit,
         day: day,
         active: active,
+        withPhoto: withPhoto,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
     }
@@ -597,8 +604,6 @@ function renderUsers() {
 }
 
 async function changeUserScore(uid, delta) {
-  const u = usersCache.find((x) => x.uid === uid);
-  if (typeof u.score === 'string') { showToast('У участника буквы — ±1 не работает', true); return; }
   try {
     await db.collection('users').doc(uid).update({
       score: firebase.firestore.FieldValue.increment(delta),
@@ -609,16 +614,6 @@ async function changeUserScore(uid, delta) {
   }
 }
 
-/* ---------- «Баллы буквами» ----------
-   Число → числом; любая другая строка → как есть («Победитель», «сто пять»).
-   Буквы в рейтинге сортируются выше цифр (порядок типов Firestore: number < string). */
-function scoreToStore(raw) {
-  const t = String(raw || '').trim();
-  if (!t) return '';
-  const num = Number(t.replace(/,/g, '.'));
-  return isNaN(num) ? t : num;
-}
-
 async function setUserScore(uid) {
   const u = usersCache.find((x) => x.uid === uid);
   // iOS Safari не поддерживает window.prompt — вместо него своя модалка.
@@ -627,9 +622,8 @@ async function setUserScore(uid) {
   back.innerHTML =
     '<div class="modal">' +
     '<div class="field"><label>Установить баллы для «' + escapeHtml((u && u.name) || '') + '»</label>' +
-    '<input id="ss-input" class="input" type="text" value="' + escapeHtml(String((u && u.score) || 0)) + '" placeholder="Цифры или буквы — «Победитель»"></div>' +
-    '<div class="hint" style="margin-bottom:12px">Буквы на первом месте рейтинга</div>' +
-    '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+    '<input id="ss-input" class="input" type="number" min="0" value="' + escapeHtml(String((u && u.score) || 0)) + '" placeholder="Баллы числом"></div>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">' +
     '<button id="ss-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
     '<button id="ss-ok" class="btn" type="button">Установить</button>' +
     '</div></div>';
@@ -637,8 +631,8 @@ async function setUserScore(uid) {
   const inp = back.querySelector('#ss-input');
   back.querySelector('#ss-cancel').addEventListener('click', () => back.remove());
   back.querySelector('#ss-ok').addEventListener('click', async () => {
-    const value = scoreToStore(inp.value);
-    if (value === '') { showToast('Введи число или буквы', true); return; }
+    const value = Number(inp.value);
+    if (!isFinite(value) || value < 0) { showToast('Введи число баллов', true); return; }
     back.remove();
     try {
       await db.collection('users').doc(uid).update({ score: value });
@@ -657,7 +651,6 @@ async function addToAll() {
   try {
     const batch = db.batch();
     usersCache.forEach((u) => {
-      if (typeof u.score === 'string') return;   // буквы не инкрементируются
       const ref = db.collection('users').doc(u.uid);
       batch.update(ref, { score: firebase.firestore.FieldValue.increment(5) });
     });
@@ -692,13 +685,8 @@ async function resetAllScores() {
    ============================================================ */
 function renderStats() {
   const total = usersCache.length;
-  const sum = usersCache.reduce((a, u) => a + (typeof u.score === 'number' ? u.score : 0), 0);
-  // Буквы — выше цифр (совпадает с сортировкой Firestore в рейтинге).
-  const top3 = [...usersCache].sort((a, b) => {
-    const an = typeof a.score === 'number', bn = typeof b.score === 'number';
-    if (an !== bn) return an ? 1 : -1;
-    return an ? b.score - a.score : 0;
-  }).slice(0, 3);
+  const sum = usersCache.reduce((a, u) => a + (Number(u.score) || 0), 0);
+  const top3 = [...usersCache].sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0)).slice(0, 3);
   const activeTasks = allTasks.filter((t) => t.active).length;
 
   document.getElementById('stat-users').textContent = total;
@@ -724,13 +712,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const type = document.getElementById('task-type').value;
     const limit = Number(document.getElementById('task-limit').value);
     const day = document.getElementById('task-day').value;
+    const withPhoto = document.getElementById('task-photo').checked;
     const rows = parseTaskLines(raw, defPoints);
     if (!rows.length) { showToast('Введи текст задания', true); return; }
     if (rows.some((r) => !r.points || r.points < 1)) {
       showToast('Баллы ≥ 1: задай поле «Баллы» или «| N» в строке', true);
       return;
     }
-    rows.forEach((r) => createTask(r.text, r.points, { type: type, limit: limit, day: day }));
+    rows.forEach((r) => createTask(r.text, r.points, { type: type, limit: limit, day: day, withPhoto: withPhoto }));
     document.getElementById('task-text').value = '';
     document.getElementById('task-day').value = '';
   });
