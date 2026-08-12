@@ -1,4 +1,4 @@
-import { parseDecision, buildCaption, findDecisionMessages } from './bot.js';
+import { parseDecision, buildCaption, findDecisionMessages, filterPeerList } from './bot.js';
 
 let pass = 0;
 const cases = [
@@ -47,6 +47,20 @@ if (found.length !== 1 || found[0].text !== 'нет' || found[0].fromId !== 42) 
 } else pass++;
 if (findDecisionMessages(history, 900).length !== 1) {
   console.log('FAIL findDecisionMessages 900');
+  process.exitCode = 1;
+} else pass++;
+
+const convs = [
+  { conversation: { peer: { id: 200000964099, type: 'user' }, can_write: { allowed: true } }, last_message: { from_id: 200000964099 } },
+  { conversation: { peer: { id: 123456, type: 'user' }, can_write: { allowed: true } }, last_message: { from_id: 123456 } },
+  { conversation: { peer: { id: 777, type: 'user' }, can_write: { allowed: false } }, last_message: { from_id: 777 } },
+  { conversation: { peer: { id: 2000000001, type: 'chat' }, can_write: { allowed: true } } },
+  {},
+];
+const selfDialog = (peerId) => peerId === 200000964099;
+const p = await filterPeerList(convs, async (peerId) => !selfDialog(peerId));
+if (JSON.stringify(p) !== JSON.stringify([123456, 2000000001])) {
+  console.log('FAIL filterPeerList:', JSON.stringify(p));
   process.exitCode = 1;
 } else pass++;
 
