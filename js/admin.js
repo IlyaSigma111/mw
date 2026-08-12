@@ -609,16 +609,35 @@ async function changeUserScore(uid, delta) {
 
 async function setUserScore(uid) {
   const u = usersCache.find((x) => x.uid === uid);
-  const val = prompt('Установить баллы для «' + (u && u.name) + '»:', u ? u.score : 0);
-  if (val === null || val.trim() === '') return;
-  const n = Number(val);
-  if (isNaN(n)) { showToast('Введи число', true); return; }
-  try {
-    await db.collection('users').doc(uid).update({ score: n });
-    await loadUsers();
-  } catch (err) {
-    showToast('Ошибка: ' + err.message, true);
-  }
+  // iOS Safari не поддерживает window.prompt — вместо него своя модалка.
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.innerHTML =
+    '<div class="modal">' +
+    '<div class="field"><label>Установить баллы для «' + escapeHtml((u && u.name) || '') + '»</label>' +
+    '<input id="ss-input" class="input" type="number" step="1" value="' + Number((u && u.score) || 0) + '"></div>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
+    '<button id="ss-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
+    '<button id="ss-ok" class="btn" type="button">Установить</button>' +
+    '</div></div>';
+  document.body.appendChild(back);
+  const inp = back.querySelector('#ss-input');
+  back.querySelector('#ss-cancel').addEventListener('click', () => back.remove());
+  back.querySelector('#ss-ok').addEventListener('click', async () => {
+    const raw = inp.value.trim();
+    if (raw === '') { showToast('Введи число', true); return; }
+    const n = Number(raw);
+    if (isNaN(n)) { showToast('Введи число', true); return; }
+    back.remove();
+    try {
+      await db.collection('users').doc(uid).update({ score: n });
+      await loadUsers();
+    } catch (err) {
+      showToast('Ошибка: ' + err.message, true);
+    }
+  });
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') back.querySelector('#ss-ok').click(); });
+  inp.focus();
 }
 
 async function addToAll() {
