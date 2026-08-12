@@ -144,11 +144,11 @@ async function scanAndDecide(env, db, submissions, peers) {
         decidedAt: FieldValue.serverTimestamp(),
       });
       if (decision === 'approve' && sub.uid) {
-        await db.doc(`users/${sub.uid}`).update({
+        await db.doc(`users/${sub.uid}`).set({
           score: FieldValue.increment(sub.points || 0),
           [`done.${sub.taskId}`]: true,
           updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
         console.log(`awarded ${sub.points} to ${sub.uid}`);
       }
     }
