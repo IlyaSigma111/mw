@@ -181,6 +181,19 @@ async function scanAndDecide(env, db, submissions, peers) {
           console.warn(`status edit fail peer ${other}: ${e.message}`);
         }
       }
+      const ack = decision === 'approve'
+        ? `✅ Засчитано! Участнику «${sub.name || sub.uid}» начислено +${sub.points} б. Спасибо за помощь!`
+        : `❌ Отклонено. Участнику «${sub.name || sub.uid}» баллы не начислены. Спасибо за проверку!`;
+      try {
+        await vkApi(env.VK_TOKEN, 'messages.send', {
+          peer_id: peer,
+          random_id: Math.floor(Math.random() * 0x7fffffff),
+          message: ack,
+        });
+        console.log(`ack ${snap.id} -> peer ${peer}: ${decision}`);
+      } catch (e) {
+        console.warn(`ack fail peer ${peer}: ${e.message}`);
+      }
     }
   }
 }
