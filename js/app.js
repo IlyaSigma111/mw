@@ -334,6 +334,8 @@ const TASKS_CACHE_KEY = 'mw_tasks_cache_v1';
 const TASKS_TTL = 15 * 60 * 1000;   // 15 минут: столько живой кэш заданий без чтения Firestore
 let seenTasks = new Set();
 let lastTasks = [];
+let tasksSubscribed = false;   // не больше одного живого слушателя заданий на устройство
+let tasksRetryTimer = null;    // один отложенный повтор подписки (по протуханию кэша)
 
 function tasksCache() {
   try { return JSON.parse(localStorage.getItem(TASKS_CACHE_KEY) || 'null'); } catch (e) { return null; }
@@ -347,13 +349,16 @@ function subscribeTasks(uid) {
   try { seenTasks = new Set(JSON.parse(localStorage.getItem(SEEN_TASKS_KEY) || '[]')); } catch (e) {}
   const cached = tasksCache();
   if (cached && Array.isArray(cached.list) && cached.list.length) renderTasks(cached.list);
+  if (tasksSubscribed) return;   // слушатель уже есть — не плодим вторые
   if (tasksCacheFresh()) {
     // Кэш свежий: не читаем Firestore при каждом входе (это ~30 чтений на сессию).
-    // Подключимся заново, когда кэш протухнет.
+    // Планируем один повтор подписки на момент протухания кэша.
+    if (tasksRetryTimer) return;
     const wait = TASKS_TTL - (Date.now() - cached.ts) + 1000;
-    setTimeout(() => subscribeTasks(uid), Math.max(wait, 1000));
+    tasksRetryTimer = setTimeout(() => { tasksRetryTimer = null; subscribeTasks(uid); }, Math.max(wait, 1000));
     return;
   }
+  tasksSubscribed = true;
   listenWithFallback(
     db.collection('tasks').where('active', '==', true).orderBy('createdAt', 'desc'),
     (snap) => {
