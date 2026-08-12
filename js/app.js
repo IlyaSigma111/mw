@@ -10,6 +10,7 @@ const doneCache = JSON.parse(localStorage.getItem(SELF_DOC_CACHE) || '{}');
 let db, auth;
 let myUid = '';    // users/<uid> текущего участника
 let myVkId = '';   // VK ID участника (общий для всех устройств)
+let myScore = 0;   // текущие баллы (число или буквы, если их поставил админ)
 
 /* ---------- Тосты ---------- */
 function showToast(text, isErr) {
@@ -173,7 +174,8 @@ function subscribeScore(uid, vk) {
         ref.set({ vkId: String(vk.id), name: name, avatar: avatar }, { merge: true })
           .catch(() => {});
       }
-      document.getElementById('score-num').textContent = d.score || 0;
+      myScore = d.score || 0;
+      document.getElementById('score-num').textContent = myScore;
       // Синхронизируем «выполненные задания» с других устройств.
       // done может быть как map'ом {id: счётчик}, так и старым массивом id.
       let changed = false;
@@ -195,6 +197,7 @@ function subscribeScore(uid, vk) {
 }
 
 function setScore(n) {
+  myScore = n;
   document.getElementById('score-num').textContent = n;
 }
 
@@ -460,6 +463,11 @@ async function doTask(task) {
   const lim = taskLimit(task);
   const next = taskCount(task) + 1;
   if (next > lim) { showToast('Лимит выполнений исчерпан', true); vkFeedback('error'); return; }
+  if (typeof myScore === 'string') {
+    showToast('У тебя буквы — задания больше не начисляют баллы', true);
+    vkFeedback('error');
+    return;
+  }
   try {
     if (DEV_MODE) {
       const cur = Number(localStorage.getItem('mw_dev_score') || 0) + task.points;

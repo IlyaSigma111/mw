@@ -597,6 +597,8 @@ function renderUsers() {
 }
 
 async function changeUserScore(uid, delta) {
+  const u = usersCache.find((x) => x.uid === uid);
+  if (typeof u.score === 'string') { showToast('У участника буквы — ±1 не работает', true); return; }
   try {
     await db.collection('users').doc(uid).update({
       score: firebase.firestore.FieldValue.increment(delta),
@@ -607,38 +609,14 @@ async function changeUserScore(uid, delta) {
   }
 }
 
-/* ---------- «Баллы буквами» ---------- */
-const NUM_WORDS = {
-  ноль: 0, один: 1, одна: 1, одно: 1, два: 2, две: 2, три: 3, четыре: 4, пять: 5,
-  шесть: 6, семь: 7, восемь: 8, девять: 9,
-  десять: 10, одиннадцать: 11, двенадцать: 12, тринадцать: 13, четырнадцать: 14,
-  пятнадцать: 15, шестнадцать: 16, семнадцать: 17, восемнадцать: 18, девятнадцать: 19,
-  двадцать: 20, тридцать: 30, сорок: 40, пятьдесят: 50, шестьдесят: 60, семьдесят: 70,
-  восемьдесят: 80, девяносто: 90,
-  сто: 100, двести: 200, триста: 300, четыреста: 400, пятьсот: 500, шестьсот: 600,
-  семьсот: 700, восемьсот: 800, девятьсот: 900,
-};
-/* Цифры («5», «5,5») или словами («пять», «сто пять», «две тысячи») → число. Иначе NaN. */
-function scoreFromText(raw) {
+/* ---------- «Баллы буквами» ----------
+   Число → числом; любая другая строка → как есть («Победитель», «сто пять»).
+   Буквы в рейтинге сортируются выше цифр (порядок типов Firestore: number < string). */
+function scoreToStore(raw) {
   const t = String(raw || '').trim();
-  if (!t) return NaN;
+  if (!t) return '';
   const num = Number(t.replace(/,/g, '.'));
-  if (!isNaN(num)) return num;
-  const words = t.toLowerCase().replace(/[^а-яё0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
-  if (!words.length) return NaN;
-  let acc = 0, thousand = 0;
-  for (const w of words) {
-    if (w === 'тысяча' || w === 'тысячи' || w === 'тысяч') {
-      thousand += (acc || 1) * 1000;
-      acc = 0;
-      continue;
-    }
-    const dn = Number(w);
-    const v = isNaN(dn) ? NUM_WORDS[w] : dn;
-    if (v === undefined) return NaN;
-    acc += v;
-  }
-  return thousand + acc;
+  return isNaN(num) ? t : num;
 }
 
 async function setUserScore(uid) {
@@ -649,8 +627,9 @@ async function setUserScore(uid) {
   back.innerHTML =
     '<div class="modal">' +
     '<div class="field"><label>Установить баллы для «' + escapeHtml((u && u.name) || '') + '»</label>' +
-    '<input id="ss-input" class="input" type="text" inputmode="numeric" value="' + Number((u && u.score) || 0) + '" placeholder="Цифрой или словами: «сто пять»"></div>' +
-    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
+    '<input id="ss-input" class="input" type="text" value="' + escapeHtml(String((u && u.score) || 0)) + '" placeholder="Цифры или буквы — «Победитель»"></div>' +
+    '<div class="hint" style="margin-bottom:12px">Буквы на первом месте рейтинга</div>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end">' +
     '<button id="ss-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
     '<button id="ss-ok" class="btn" type="button">Установить</button>' +
     '</div></div>';
@@ -658,11 +637,11 @@ async function setUserScore(uid) {
   const inp = back.querySelector('#ss-input');
   back.querySelector('#ss-cancel').addEventListener('click', () => back.remove());
   back.querySelector('#ss-ok').addEventListener('click', async () => {
-    const n = scoreFromText(inp.value);
-    if (isNaN(n)) { showToast('Напиши число или словами, например «сто пять»', true); return; }
+    const value = scoreToStore(inp.value);
+    if (value === '') { showToast('Введи число или буквы', true); return; }
     back.remove();
     try {
-      await db.collection('users').doc(uid).update({ score: n });
+      await db.collection('users').doc(uid).update({ score: value });
       await loadUsers();
     } catch (err) {
       showToast('Ошибка: ' + err.message, true);
@@ -678,6 +657,7 @@ async function addToAll() {
   try {
     const batch = db.batch();
     usersCache.forEach((u) => {
+      if (typeof u.score === 'string') return;   // буквы не инкрементируются
       const ref = db.collection('users').doc(u.uid);
       batch.update(ref, { score: firebase.firestore.FieldValue.increment(5) });
     });
@@ -712,8 +692,13 @@ async function resetAllScores() {
    ============================================================ */
 function renderStats() {
   const total = usersCache.length;
-  const sum = usersCache.reduce((a, u) => a + (u.score || 0), 0);
-  const top3 = [...usersCache].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 3);
+  const sum = usersCache.reduce((a, u) => a + (typeof u.score === 'number' ? u.score : 0), 0);
+  // Буквы — выше цифр (совпадает с сортировкой Firestore в рейтинге).
+  const top3 = [...usersCache].sort((a, b) => {
+    const an = typeof a.score === 'number', bn = typeof b.score === 'number';
+    if (an !== bn) return an ? 1 : -1;
+    return an ? b.score - a.score : 0;
+  }).slice(0, 3);
   const activeTasks = allTasks.filter((t) => t.active).length;
 
   document.getElementById('stat-users').textContent = total;
