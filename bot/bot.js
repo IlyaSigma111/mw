@@ -74,14 +74,21 @@ async function uploadPhotoToChat(token, groupId, peerId, buf, filename) {
 
 export async function runBot(env) {
   const { VK_TOKEN, VK_GROUP_ID, VK_CHAT_ID, SA_PATH } = env;
-  if (!VK_TOKEN || !VK_GROUP_ID || !VK_CHAT_ID || !SA_PATH) {
-    throw new Error('missing env: need VK_TOKEN, VK_GROUP_ID, VK_CHAT_ID, SA_PATH');
+  if (!VK_TOKEN || !VK_GROUP_ID || !SA_PATH) {
+    throw new Error('missing env: need VK_TOKEN, VK_GROUP_ID, SA_PATH (VK_CHAT_ID optional)');
   }
   const sa = JSON.parse(readFileSync(SA_PATH, 'utf8'));
   const app = initializeApp({ credential: cert(sa), projectId: PROJECT_ID });
   const db = getFirestore(app);
   const bucket = getStorage(app).bucket(BUCKET);
-  const chatId = Number(VK_CHAT_ID);
+  let chatId = VK_CHAT_ID ? Number(VK_CHAT_ID) : null;
+  if (!chatId) {
+    const convs = await vkApi(VK_TOKEN, 'messages.getConversations', { count: 20, filter: 'chat' });
+    const chat = (convs.items || []).find((c) => c.conversation.peer.type === 'chat');
+    if (!chat) throw new Error('VK_CHAT_ID not set and no chat conversations found');
+    chatId = chat.conversation.peer.id;
+    console.log(`auto chatId=${chatId}`);
+  }
 
   const pending = await db
     .collection('submissions')
