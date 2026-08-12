@@ -72,27 +72,16 @@ async function uploadPhotoToPeer(token, groupId, peerId, buf, filename) {
   return `photo${p.owner_id}_${p.id}_${p.access_key}`;
 }
 
-export async function filterPeerList(convs, isRealDialog) {
+export function filterPeerList(convs) {
   const peers = [];
   for (const it of (convs || [])) {
     const p = it.conversation && it.conversation.peer;
     if (!p) continue;
     const canWrite = it.conversation.can_write && it.conversation.can_write.allowed !== false;
     if (!canWrite) continue;
-    if (p.type === 'chat') {
-      peers.push(p.id);
-      continue;
-    }
-    if (p.type === 'user' && (await isRealDialog(p.id))) {
-      peers.push(p.id);
-    }
+    peers.push(p.id);
   }
   return peers;
-}
-
-async function isRealDialog(token, peerId) {
-  const hist = await vkApi(token, 'messages.getHistory', { peer_id: peerId, count: 20 });
-  return (hist.items || []).some((m) => m.from_id !== peerId);
 }
 
 async function discoverPeers(token, configured) {
@@ -100,7 +89,7 @@ async function discoverPeers(token, configured) {
     return configured.map(Number).filter((n) => Number.isFinite(n));
   }
   const convs = await vkApi(token, 'messages.getConversations', { count: 200 });
-  return filterPeerList(convs.items || [], (peerId) => isRealDialog(token, peerId));
+  return filterPeerList(convs.items || []);
 }
 
 async function sendSubmission(env, db, bucket, snap, peers) {
