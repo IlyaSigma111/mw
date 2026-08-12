@@ -28,6 +28,11 @@ export function buildCaption(sub) {
   return lines.join('\n');
 }
 
+export function buildStatusText(sub, decision) {
+  const status = decision === 'approve' ? '✅ Засчитано' : '❌ Отклонено';
+  return `${buildCaption(sub)}\n\nСтатус: ${status} другим модератором`;
+}
+
 export function findDecisionMessages(history, msgId) {
   const out = [];
   for (const m of history || []) {
@@ -123,9 +128,11 @@ async function sendSubmission(env, db, bucket, snap, peers) {
 }
 
 async function scanAndDecide(env, db, submissions, peers) {
+  const decided = new Set();
   for (const peer of peers) {
     const history = await vkApi(env.VK_TOKEN, 'messages.getHistory', { peer_id: peer, count: 100 });
     for (const snap of submissions) {
+      if (decided.has(snap.id)) continue;
       const sub = snap.data();
       if (sub.state !== 'pending' || !sub.msgIds || sub.msgIds[peer] == null) continue;
       const replies = findDecisionMessages(history.items, sub.msgIds[peer]);
@@ -138,6 +145,7 @@ async function scanAndDecide(env, db, submissions, peers) {
         }
       }
       if (!decision) continue;
+      decided.add(snap.id);
       await snap.ref.update({
         state: decision,
         decidedBy: null,
@@ -150,6 +158,22 @@ async function scanAndDecide(env, db, submissions, peers) {
           updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
         console.log(`awarded ${sub.points} to ${sub.uid}`);
+      }
+      const statusText = buildStatusText(sub, decision);
+      for (const other of peers) {
+        if (other === peer) continue;
+        const msgId = sub.msgIds[other];
+        if (msgId == null) continue;
+        try {
+          await vkApi(env.VK_TOKEN, 'messages.edit', {
+            peer_id: other,
+            message_id: msgId,
+            message: statusText,
+          });
+          console.log(`status ${snap.id} -> peer ${other} (msgId=${msgId}): ${decision}`);
+        } catch (e) {
+          console.warn(`status edit fail peer ${other}: ${e.message}`);
+        }
       }
     }
   }

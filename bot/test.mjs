@@ -1,4 +1,4 @@
-import { parseDecision, buildCaption, findDecisionMessages, filterPeerList } from './bot.js';
+import { parseDecision, buildCaption, buildStatusText, findDecisionMessages, filterPeerList } from './bot.js';
 
 let pass = 0;
 const cases = [
@@ -30,6 +30,17 @@ for (const [input, want] of cases) {
 const cap = buildCaption({ taskId: 7, taskText: 'Селфи с розой', points: 50, name: 'Илюха' });
 if (!cap.includes('№7') || !cap.includes('Селфи с розой') || !cap.includes('+50') || !cap.includes('Илюха')) {
   console.log('FAIL buildCaption:', cap);
+  process.exitCode = 1;
+} else pass++;
+
+const stApprove = buildStatusText({ taskId: 7, taskText: 'Селфи с розой', points: 50, name: 'Илюха' }, 'approve');
+const stReject = buildStatusText({ taskId: 7, taskText: 'Селфи с розой', points: 50, name: 'Илюха' }, 'reject');
+if (!stApprove.includes('✅ Засчитано') || stApprove.includes('Отклонено')) {
+  console.log('FAIL buildStatusText approve:', stApprove);
+  process.exitCode = 1;
+} else pass++;
+if (!stReject.includes('❌ Отклонено') || !stReject.includes('Фото с задания №7')) {
+  console.log('FAIL buildStatusText reject:', stReject);
   process.exitCode = 1;
 } else pass++;
 
