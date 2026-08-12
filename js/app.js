@@ -61,9 +61,8 @@ async function init() {
       seedDevData(myUid, vk);
     } else {
       subscribeScore(myUid);
-      subscribeRating();
       subscribeTasks(myUid);
-      subscribeBadges(myUid);
+      // subscribeBadges отключён — не нагружаем Firestore (включится при запуске бейджей)
     }
     maybeShowAdminBtn(vk);
   } catch (err) {
@@ -75,21 +74,23 @@ async function init() {
 const DEFAULT_TASKS_EMPTY = [];
 
 /* Создать документ users/vk_<VK ID> при первом входе (score: 0);
-   при повторных входах обновляем имя/аватар из VK, баллы и done не трогаем. */
+   при повторных входах обновляем имя/аватар из VK только если изменились
+   (иначе каждый вход = лишняя запись в Firestore). */
 async function ensureUserDoc(uid, vk) {
   const ref = db.collection('users').doc(uid);
   const snap = await ref.get();
+  const name = (vk.first_name + ' ' + vk.last_name).trim();
+  const avatar = vk.photo_100 || '';
   if (snap.exists) {
-    await ref.set({
-      vkId: String(vk.id),
-      name: (vk.first_name + ' ' + vk.last_name).trim(),
-      avatar: vk.photo_100 || '',
-    }, { merge: true });
+    const d = snap.data();
+    if (d.name !== name || d.avatar !== avatar) {
+      await ref.set({ vkId: String(vk.id), name: name, avatar: avatar }, { merge: true });
+    }
   } else {
     await ref.set({
       vkId: String(vk.id),
-      name: (vk.first_name + ' ' + vk.last_name).trim(),
-      avatar: vk.photo_100 || '',
+      name: name,
+      avatar: avatar,
       score: 0,
       done: {},          // {taskId: сколько раз выполнено}
     });
@@ -116,30 +117,49 @@ function escapeHtml(s) {
 }
 
 /* Кнопка «Админ» в настройках: показываем только организаторам (VK ID из config/admins) */
+/* Кнопка «Админ» в настройках: показываем только организаторам (VK ID из config/admins).
+   Проверку кешируем в localStorage — не читаем config/admins при каждом запуске. */
+const ADMIN_CACHE_KEY = 'mw_admin_v1';
+
 async function maybeShowAdminBtn(vk) {
   const entry = document.getElementById('admin-entry');
   if (!entry) return;
   if (DEV_MODE) { entry.style.display = 'block'; return; }
   try {
-    const snap = await db.collection('config').doc('admins').get();
-    const ids = snap.exists && Array.isArray(snap.data().ids)
-      ? snap.data().ids.map(String)
-      : [];
-    if (ids.includes(String(vk.id))) entry.style.display = 'block';
+    let cached = null;
+    try { cached = localStorage.getItem(ADMIN_CACHE_KEY); } catch (e) {}
+    if (cached === '1') { entry.style.display = 'block'; return; }
+    if (cached !== '0') {
+      const snap = await db.collection('config').doc('admins').get();
+      const ids = snap.exists && Array.isArray(snap.data().ids)
+        ? snap.data().ids.map(String)
+        : [];
+      const isAdmin = ids.includes(String(vk.id));
+      try { localStorage.setItem(ADMIN_CACHE_KEY, isAdmin ? '1' : '0'); } catch (e) {}
+      if (isAdmin) entry.style.display = 'block';
+    }
   } catch (err) { /* молчим — кнопка просто не покажется */ }
 }
 
 /* ---------- Realtime с фолбэком ----------
    onSnapshot — основной источник, но если за firstMs он ничего не прислал
    (напр. iOS WKWebView глушит long-polling-канал), догружаем get()
-   и опрашиваем каждые 15 секунд, пока подписка молчит. */
+   и опрашиваем каждые 15 секунд, ПОКА подписка молчит.
+   Как только пришёл первый снапшот (любым путём) — поллинг и интервал гасятся. */
 function listenWithFallback(ref, onSnap, onErr, firstMs) {
   let got = false;
-  const deliver = (snap) => { got = true; onSnap(snap); };
+  let timer = null;
+  const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+  const deliver = (snap) => {
+    if (got) return;
+    got = true;
+    stop();
+    onSnap(snap);
+  };
   const poll = () => ref.get().then(deliver).catch(() => {});
   ref.onSnapshot(deliver, onErr);
   setTimeout(() => { if (!got) poll(); }, firstMs || 6000);
-  setInterval(() => { if (!got) poll(); }, 15000);
+  timer = setInterval(() => { if (!got) poll(); }, 15000);
 }
 
 /* ---------- Баллы + выполненные задания в реальном времени ---------- */
@@ -188,7 +208,7 @@ function subscribeBadges(uid) {
       allBadges = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       myBadges = allBadges.filter((b) => myBadgeIds.includes(b.id));
       renderBadges();
-      if (ratingData.length) throttleRenderRating();   // обновить бейджи в рейтинге
+      if (ratingData.length) loadRating();   // обновить бейджи в рейтинге
     },
     () => { /* молчим — бейджи не критичны */ }
   );
@@ -325,51 +345,48 @@ async function refreshSchedule() {
   }
 }
 
-/* ---------- Рейтинг топ-10 ---------- */
+/* ---------- Рейтинг топ-10 ----------
+   БЕЗ live-подписки: живой топ-10 при 150 участниках множил бы чтения
+   (каждая запись балла топ-игрока → снапшот всем). Грузим по запросу. */
 let ratingData = [];
-let lastRatingRender = 0;
-let ratingTimer = null;
+let ratingLoading = false;
 
-function subscribeRating() {
-  listenWithFallback(
-    db.collection('users').orderBy('score', 'desc').limit(10),
-    (snap) => {
-      ratingData = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
-      throttleRenderRating();
-    },
-    () => showToast('Рейтинг недоступен', true)
-  );
-}
-
-/* Обновление не чаще 5 секунд */
-function throttleRenderRating() {
-  const now = Date.now();
-  if (now - lastRatingRender >= 5000) {
-    lastRatingRender = now;
-    renderRating();
-    return;
+async function loadRating() {
+  if (DEV_MODE || ratingLoading) return;
+  if (!db) { showToast('Приложение ещё не готово, обнови страницу', true); return; }
+  const wrap = document.getElementById('rating');
+  ratingLoading = true;
+  if (wrap && !wrap.innerHTML.trim()) {
+    wrap.innerHTML = '<div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>';
   }
-  if (ratingTimer) return;
-  ratingTimer = setTimeout(() => {
-    ratingTimer = null;
-    lastRatingRender = Date.now();
+  try {
+    const snap = await db.collection('users').orderBy('score', 'desc').limit(10).get();
+    ratingData = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
     renderRating();
-  }, 5000 - (now - lastRatingRender));
+  } catch (err) {
+    showToast('Рейтинг недоступен', true);
+  } finally {
+    ratingLoading = false;
+  }
 }
 
 /* ---------- Задания ---------- */
+const SEEN_TASKS_KEY = 'mw_seen_tasks_v1';
 let seenTasks = new Set();
 let lastTasks = [];
 
 function subscribeTasks(uid) {
+  try { seenTasks = new Set(JSON.parse(localStorage.getItem(SEEN_TASKS_KEY) || '[]')); } catch (e) {}
   listenWithFallback(
     db.collection('tasks').where('active', '==', true).orderBy('createdAt', 'desc'),
     (snap) => {
       const fresh = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      // Уведомление о новом задании
+      // Уведомление о новом задании — один раз за всё время, и не для сделанных
       fresh.forEach((t) => {
+        if (taskDone(t)) return;
         if (!seenTasks.has(t.id)) {
           seenTasks.add(t.id);
+          try { localStorage.setItem(SEEN_TASKS_KEY, JSON.stringify([...seenTasks])); } catch (e) {}
           showToast('Новое задание: ' + t.text);
         }
       });
@@ -488,6 +505,7 @@ function initDock() {
       vkFeedback('click');
       document.querySelectorAll('.dock-item').forEach((b) => b.classList.toggle('on', b === btn));
       document.querySelectorAll('.app-pane').forEach((p) => p.classList.toggle('active', p.dataset.tab === tab));
+      if (tab === 'rating') loadRating();
     });
   });
 }
@@ -591,6 +609,13 @@ document.addEventListener('DOMContentLoaded', () => {
     vkFeedback('click');
     refreshSchedule();
   });
+  const ratingRefresh = document.getElementById('rating-refresh');
+  if (ratingRefresh) {
+    ratingRefresh.addEventListener('click', () => {
+      vkFeedback('click');
+      loadRating();
+    });
+  }
   const adminBtn = document.getElementById('btn-admin-open');
   if (adminBtn) {
     adminBtn.addEventListener('click', () => { location.href = 'admin.html' + location.search; });
