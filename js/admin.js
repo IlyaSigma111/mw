@@ -607,6 +607,40 @@ async function changeUserScore(uid, delta) {
   }
 }
 
+/* ---------- «Баллы буквами» ---------- */
+const NUM_WORDS = {
+  ноль: 0, один: 1, одна: 1, одно: 1, два: 2, две: 2, три: 3, четыре: 4, пять: 5,
+  шесть: 6, семь: 7, восемь: 8, девять: 9,
+  десять: 10, одиннадцать: 11, двенадцать: 12, тринадцать: 13, четырнадцать: 14,
+  пятнадцать: 15, шестнадцать: 16, семнадцать: 17, восемнадцать: 18, девятнадцать: 19,
+  двадцать: 20, тридцать: 30, сорок: 40, пятьдесят: 50, шестьдесят: 60, семьдесят: 70,
+  восемьдесят: 80, девяносто: 90,
+  сто: 100, двести: 200, триста: 300, четыреста: 400, пятьсот: 500, шестьсот: 600,
+  семьсот: 700, восемьсот: 800, девятьсот: 900,
+};
+/* Цифры («5», «5,5») или словами («пять», «сто пять», «две тысячи») → число. Иначе NaN. */
+function scoreFromText(raw) {
+  const t = String(raw || '').trim();
+  if (!t) return NaN;
+  const num = Number(t.replace(/,/g, '.'));
+  if (!isNaN(num)) return num;
+  const words = t.toLowerCase().replace(/[^а-яё0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  if (!words.length) return NaN;
+  let acc = 0, thousand = 0;
+  for (const w of words) {
+    if (w === 'тысяча' || w === 'тысячи' || w === 'тысяч') {
+      thousand += (acc || 1) * 1000;
+      acc = 0;
+      continue;
+    }
+    const dn = Number(w);
+    const v = isNaN(dn) ? NUM_WORDS[w] : dn;
+    if (v === undefined) return NaN;
+    acc += v;
+  }
+  return thousand + acc;
+}
+
 async function setUserScore(uid) {
   const u = usersCache.find((x) => x.uid === uid);
   // iOS Safari не поддерживает window.prompt — вместо него своя модалка.
@@ -615,7 +649,7 @@ async function setUserScore(uid) {
   back.innerHTML =
     '<div class="modal">' +
     '<div class="field"><label>Установить баллы для «' + escapeHtml((u && u.name) || '') + '»</label>' +
-    '<input id="ss-input" class="input" type="number" step="1" value="' + Number((u && u.score) || 0) + '"></div>' +
+    '<input id="ss-input" class="input" type="text" inputmode="numeric" value="' + Number((u && u.score) || 0) + '" placeholder="Цифрой или словами: «сто пять»"></div>' +
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
     '<button id="ss-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
     '<button id="ss-ok" class="btn" type="button">Установить</button>' +
@@ -624,10 +658,8 @@ async function setUserScore(uid) {
   const inp = back.querySelector('#ss-input');
   back.querySelector('#ss-cancel').addEventListener('click', () => back.remove());
   back.querySelector('#ss-ok').addEventListener('click', async () => {
-    const raw = inp.value.trim();
-    if (raw === '') { showToast('Введи число', true); return; }
-    const n = Number(raw);
-    if (isNaN(n)) { showToast('Введи число', true); return; }
+    const n = scoreFromText(inp.value);
+    if (isNaN(n)) { showToast('Напиши число или словами, например «сто пять»', true); return; }
     back.remove();
     try {
       await db.collection('users').doc(uid).update({ score: n });
