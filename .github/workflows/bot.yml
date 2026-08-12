@@ -1,0 +1,41 @@
+name: mw-bot
+
+on:
+  schedule:
+    - cron: '*/2 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mw-bot
+  cancel-in-progress: false
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: bot/package-lock.json
+
+      - name: deps
+        run: npm ci
+        working-directory: bot
+
+      - name: service account
+        run: echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_B64 }}" | base64 -d > /tmp/sa.json
+
+      - name: run bot
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
+          VK_TOKEN: ${{ secrets.VK_TOKEN }}
+          VK_GROUP_ID: ${{ secrets.VK_GROUP_ID }}
+          VK_CHAT_ID: ${{ secrets.VK_CHAT_ID }}
+        run: node bot.js
+        working-directory: bot

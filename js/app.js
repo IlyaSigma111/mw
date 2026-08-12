@@ -619,6 +619,7 @@ async function submitTaskWithPhoto(task, file) {
       points: task.points,
       photoPath: photoPath,
       sent: false,
+      state: 'pending',
       ts: firebase.firestore.FieldValue.serverTimestamp(),
     });
     showToast('Фото ушло в паблик!');

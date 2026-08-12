@@ -1,0 +1,10 @@
+{
+  "name": "mw-vk-bot",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": { "start": "node bot.js" },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
