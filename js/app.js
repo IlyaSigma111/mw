@@ -470,17 +470,12 @@ function renderTasks(list) {
     const lim = taskLimit(t);
     const progress = t.type === 'repeat' ? ' <span class="badge badge-on">' + cnt + '/' + lim + '</span>' : '';
     const dayChip = t.day && String(t.day).trim() ? ' <span class="badge badge-off">' + escapeHtml(t.day) + '</span>' : '';
+    const btnLabel = t.withPhoto ? (cnt > 0 ? 'Ещё раз' : 'Прикрепить фото') : (cnt > 0 ? 'Ещё раз' : 'Выполнить');
     return (
       '<div class="card task rise" data-id="' + t.id + '">' +
       '<span class="task-text">' + escapeHtml(t.text) + dayChip + '</span>' +
       '<span class="task-pts">+' + t.points + progress + '</span>' +
-      '<button class="btn btn-sm" data-act="do">' + (cnt > 0 ? 'Ещё раз' : 'Выполнить') + '</button>' +
-      (t.withPhoto
-        ? '<button class="btn btn-sm btn-photo" data-act="photo" title="Сфоткать и отправить">' +
-          '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-          '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/>' +
-          '<path d="M21 15l-5-5L5 21"/></svg></button>'
-        : '') +
+      '<button class="btn btn-sm' + (t.withPhoto ? ' btn-photo' : '') + '" data-act="do">' + btnLabel + '</button>' +
       '</div>'
     );
   }).join('') +
@@ -494,16 +489,12 @@ function renderTasks(list) {
       const id = card.dataset.id;
       const task = list.find((t) => t.id === id);
       btn.disabled = true;
-      await doTask(task);
-    });
-  });
-  wrap.querySelectorAll('[data-act="photo"]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const card = btn.closest('.task');
-      const id = card.dataset.id;
-      const task = list.find((t) => t.id === id);
-      vkFeedback('click');
-      pickTaskPhoto(task);
+      if (task.withPhoto) {
+        vkFeedback('click');
+        pickTaskPhoto(task);
+      } else {
+        await doTask(task);
+      }
     });
   });
   if (window.feather) feather.replace();
