@@ -62,7 +62,6 @@ async function init() {
     } else {
       subscribeScore(myUid);
       subscribeTasks(myUid);
-      // subscribeBadges отключён — не нагружаем Firestore (включится при запуске бейджей)
     }
     maybeShowAdminBtn(vk);
   } catch (err) {
@@ -193,82 +192,6 @@ function subscribeScore(uid) {
 
 function setScore(n) {
   document.getElementById('score-num').textContent = n;
-}
-
-/* ---------- Бейджи участника ---------- */
-let myBadges = [];          // [{id, name, caption, img}] — выданные мне
-let allBadges = [];         // все бейджи (для показа в рейтинге)
-let myBadgeIds = [];        // выданные мне id
-let myActiveBadge = null;   // id бейджа, который показываю в рейтинге
-
-function subscribeBadges(uid) {
-  listenWithFallback(
-    db.collection('badges'),
-    (snap) => {
-      allBadges = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      myBadges = allBadges.filter((b) => myBadgeIds.includes(b.id));
-      renderBadges();
-      if (ratingData.length) loadRating();   // обновить бейджи в рейтинге
-    },
-    () => { /* молчим — бейджи не критичны */ }
-  );
-  listenWithFallback(
-    db.collection('users').doc(uid),
-    (snap) => {
-      if (snap.exists) {
-        const d = snap.data();
-        myBadgeIds = Array.isArray(d.badges) ? d.badges : [];
-        myActiveBadge = d.activeBadge || null;
-        myBadges = allBadges.filter((b) => myBadgeIds.includes(b.id));
-        renderBadges();
-      }
-    },
-    () => { /* молчим */ }
-  );
-}
-
-function renderBadges() {
-  const wrap = document.getElementById('badges');
-  if (!wrap) return;
-  if (!myBadges.length) {
-    wrap.innerHTML = '<div class="empty">Пока пусто — бейджи вручает организатор за достижения.</div>';
-    return;
-  }
-  wrap.innerHTML = myBadges.map((b) => {
-    const active = b.id === myActiveBadge;
-    return '<div class="card badge-card">' +
-      '<img class="badge-img" src="' + escapeHtml(b.img || '') + '" alt="">' +
-      '<div class="grow"><b>' + escapeHtml(b.name || 'Бейдж') + '</b>' +
-      '<small>' + escapeHtml(b.caption || '') + '</small>' +
-      '<button class="btn btn-sm ' + (active ? 'btn-badge-active' : 'btn-ghost') + '" data-activate="' + b.id + '" type="button">' +
-      (active ? 'Показывается в рейтинге' : 'Показывать в рейтинге') + '</button></div>' +
-      '</div>';
-  }).join('');
-  document.querySelectorAll('[data-activate]').forEach((btn) => {
-    btn.addEventListener('click', () => setActiveBadge(btn.dataset.activate));
-  });
-}
-
-/* Выбрать/снять бейдж, показываемый в рейтинге (хранится в users/{uid}.activeBadge) */
-async function setActiveBadge(id) {
-  if (DEV_MODE) {
-    myActiveBadge = myActiveBadge === id ? null : id;
-    renderBadges();
-    renderRating();
-    return;
-  }
-  try {
-    const ref = db.collection('users').doc(myUid);
-    if (myActiveBadge === id) {
-      await ref.update({ activeBadge: firebase.firestore.FieldValue.delete() });
-    } else {
-      await ref.update({ activeBadge: id });
-    }
-    vkFeedback('success');
-    showToast(myActiveBadge === id ? 'Бейдж убран из рейтинга' : 'Бейдж показывается в рейтинге');
-  } catch (err) {
-    showToast('Не удалось: ' + err.message, true);
-  }
 }
 
 /* ---------- Расписание ---------- */
@@ -567,12 +490,6 @@ function seedDevData(uid, vk) {
     { id: 'dev-1', text: 'Сделай фото заката и покажи соседу', points: 5 },
     { id: 'dev-2', text: 'Найди участника из другого города', points: 10 },
   ]);
-  myBadges = [
-    { id: 'dev-b1', name: 'DEV-бейдж', caption: 'Пример бейджа для теста', img: '' },
-  ];
-  allBadges = myBadges.slice();
-  myActiveBadge = null;
-  renderBadges();
 }
 
 function renderRating(listOverride) {
@@ -588,14 +505,12 @@ function renderRating(listOverride) {
     const avatar = u.avatar
       ? '<img class="rate-avatar" src="' + escapeHtml(u.avatar) + '" alt="">'
       : '<div class="rate-avatar">' + escapeHtml((u.name || '?')[0]) + '</div>';
-    const badge = u.activeBadge ? allBadges.find((b) => b.id === u.activeBadge) : null;
     return (
       '<div class="rate-row' + me + '">' +
       '<div class="rate-rank ' + rankCls + '">' + (i + 1) + '</div>' +
       avatar +
       '<div class="rate-name">' +
       '<span class="rate-name-text">' + escapeHtml(u.name || 'Без имени') + '</span>' +
-      (badge ? '<img class="rate-badge" src="' + escapeHtml(badge.img || '') + '" title="' + escapeHtml(badge.name || '') + '" alt="">' : '') +
       '</div>' +
       '<div class="rate-pts">' + (u.score || 0) + '</div>' +
       '</div>'

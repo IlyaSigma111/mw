@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=6">
+  <link rel="stylesheet" href="css/styles.css?v=7">
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -69,18 +69,8 @@
       </div>
     </section>
 
-    <!-- БЕЙДЖИ (функция приостановлена: не грузит Firestore; код в app.js сохранён) -->
-    <section class="sec tab-pane app-pane rise rise-4" data-tab="badges" style="display:none">
-      <div class="sec-head">
-        <i data-feather="star"></i>
-        <h2>Мои бейджи</h2>
-      </div>
-      <div class="sec-sub">Награды за достижения на слёте</div>
-      <div id="badges"><div class="skel h18"></div></div>
-    </section>
-
     <!-- НАСТРОЙКИ (локально, без БД) -->
-    <section class="sec tab-pane app-pane rise rise-5" data-tab="settings">
+    <section class="sec tab-pane app-pane rise rise-4" data-tab="settings">
       <div class="sec-head">
         <i data-feather="settings"></i>
         <h2>Настройки</h2>
@@ -115,18 +105,15 @@
     <button class="dock-item" data-tab="rating" type="button">
       <i data-feather="award"></i><span>Рейтинг</span>
     </button>
-    <button class="dock-item" data-tab="badges" type="button">
-      <i data-feather="star"></i><span>Бейджи</span>
-    </button>
     <button class="dock-item" data-tab="settings" type="button">
       <i data-feather="settings"></i><span>Настройки</span>
     </button>
   </nav>
 
-  <script src="js/firebase-config.js?v=6"></script>
-  <script src="js/schedule.js?v=6"></script>
-  <script src="js/vk.js?v=6"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="js/firebase-config.js?v=7"></script>
+  <script src="js/schedule.js?v=7"></script>
+  <script src="js/vk.js?v=7"></script>
+  <script src="js/app.js?v=7"></script>
   <script>
     /* Вход в админку по deep-link: ...vk.com/app54716297#admin */
     (function () {

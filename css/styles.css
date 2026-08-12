@@ -325,36 +325,9 @@ body {
 .sw.on { background: var(--accent); border-color: var(--accent); box-shadow: var(--glow); }
 .sw.on i { transform: translateX(19px); background: #001A00; }
 
-/* ---------- Бейджи ---------- */
-.badge-upload { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.badge-upload-prev {
-  width: 64px; height: 64px; border-radius: 14px;
-  border: 1px solid var(--line); object-fit: cover; flex-shrink: 0;
-}
-.badge-upload-box { flex: 1; min-width: 0; }
-.badge-thumb {
-  width: 40px; height: 40px; border-radius: 10px;
-  border: 1px solid var(--line-green); object-fit: cover; flex-shrink: 0;
-}
-.badge-card { display: flex; align-items: center; gap: 14px; }
-.badge-card .badge-img {
-  width: 56px; height: 56px; border-radius: 14px;
-  border: 1px solid var(--line-green); object-fit: cover; flex-shrink: 0;
-  box-shadow: var(--glow);
-}
-.badge-card .grow b { font-size: 15px; }
-.badge-card .grow small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
-.badge-card .btn { margin-top: 8px; }
-.btn-badge-active { background: var(--accent); color: #001A00; border-color: var(--accent); box-shadow: var(--glow); }
-
-/* Мини-бейдж в рейтинге рядом с именем */
+/* Имя в рейтинге: обрезка длинных имён */
 .rate-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .rate-name .rate-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rate-badge {
-  width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
-  object-fit: cover; border: 1px solid var(--line-green);
-  box-shadow: 0 0 6px rgba(0,255,65,0.35); margin-left: 4px;
-}
 
 /* ---------- Бейджи ---------- */
 .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
