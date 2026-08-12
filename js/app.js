@@ -49,7 +49,7 @@ async function init() {
     // 3. Документ участника привязан к VK ID, а не к uid устройства:
     //    один аккаунт ВК = один профиль (баллы, выполненные задания) на всех устройствах.
     myUid = DEV_MODE ? 'dev-user' : 'vk_' + String(vk.id);
-    myVkId = DEV_MODE ? '' : String(vk.id);    if (!DEV_MODE) await ensureUserDoc(myUid, vk);
+    myVkId = DEV_MODE ? '' : String(vk.id);
 
     // 4. Рендер + подписки
     renderHeader(vk);
@@ -60,8 +60,9 @@ async function init() {
     if (DEV_MODE) {
       seedDevData(myUid, vk);
     } else {
-      subscribeScore(myUid);
+      subscribeScore(myUid, vk);
       subscribeTasks(myUid);
+      subscribeSchedule();
     }
     maybeShowAdminBtn(vk);
   } catch (err) {
@@ -71,30 +72,6 @@ async function init() {
 }
 
 const DEFAULT_TASKS_EMPTY = [];
-
-/* Создать документ users/vk_<VK ID> при первом входе (score: 0);
-   при повторных входах обновляем имя/аватар из VK только если изменились
-   (иначе каждый вход = лишняя запись в Firestore). */
-async function ensureUserDoc(uid, vk) {
-  const ref = db.collection('users').doc(uid);
-  const snap = await ref.get();
-  const name = (vk.first_name + ' ' + vk.last_name).trim();
-  const avatar = vk.photo_100 || '';
-  if (snap.exists) {
-    const d = snap.data();
-    if (d.name !== name || d.avatar !== avatar) {
-      await ref.set({ vkId: String(vk.id), name: name, avatar: avatar }, { merge: true });
-    }
-  } else {
-    await ref.set({
-      vkId: String(vk.id),
-      name: name,
-      avatar: avatar,
-      score: 0,
-      done: {},          // {taskId: сколько раз выполнено}
-    });
-  }
-}
 
 /* ---------- Шапка: аватар + имя + баллы ---------- */
 function renderHeader(vk) {
@@ -142,13 +119,19 @@ async function maybeShowAdminBtn(vk) {
 
 /* ---------- Realtime с фолбэком ----------
    onSnapshot — основной источник, но если за firstMs он ничего не прислал
-   (напр. iOS WKWebView глушит long-polling-канал), догружаем get()
-   и опрашиваем каждые 15 секунд, ПОКА подписка молчит.
-   Как только пришёл первый снапшот (любым путём) — поллинг и интервал гасятся. */
+   (напр. iOS WKWebView глушит long-polling-канал), догружаем get().
+   Поллинг — с экспоненциальным откатом (15с → 30с → 1м → 2м → 4м) и стопом
+   после POLL_MAX попыток: если канал мёртв, вечный опрос выжжет дневной
+   лимит чтений Firestore (150 устройств × 30 документов × 4 раза/мин).
+   Первый доставленный снапшот (любым путём) гасит поллинг полностью. */
+const POLL_MAX = 5;
+
 function listenWithFallback(ref, onSnap, onErr, firstMs) {
   let got = false;
   let timer = null;
-  const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+  let polls = 0;
+  let delay = 15000;
+  const stop = () => { if (timer) { clearTimeout(timer); timer = null; } };
   const deliver = (snap) => {
     if (got) return;
     got = true;
@@ -158,32 +141,53 @@ function listenWithFallback(ref, onSnap, onErr, firstMs) {
   const poll = () => ref.get().then(deliver).catch(() => {});
   ref.onSnapshot(deliver, onErr);
   setTimeout(() => { if (!got) poll(); }, firstMs || 6000);
-  timer = setInterval(() => { if (!got) poll(); }, 15000);
+  const schedule = () => {
+    if (got || polls >= POLL_MAX) return;
+    timer = setTimeout(() => {
+      poll();
+      polls++;
+      if (polls < POLL_MAX) { delay = Math.min(delay * 2, 120000); schedule(); }
+    }, delay);
+  };
+  schedule();
 }
 
-/* ---------- Баллы + выполненные задания в реальном времени ---------- */
-function subscribeScore(uid) {
+/* ---------- Баллы + выполненные задания в реальном времени ----------
+   Подписка на свой документ заодно проверяет существование: при первом входе
+   создаёт профиль (1 запись), при смене имени/аватара обновляет их (редко).
+   Отдельный get() больше не нужен — экономит 1 чтение на каждый вход. */
+function subscribeScore(uid, vk) {
+  const name = (vk.first_name + ' ' + vk.last_name).trim();
+  const avatar = vk.photo_100 || '';
+  const ref = db.collection('users').doc(uid);
   listenWithFallback(
-    db.collection('users').doc(uid),
+    ref,
     (snap) => {
-      if (snap.exists) {
-        const d = snap.data();
-        document.getElementById('score-num').textContent = d.score || 0;
-        // Синхронизируем «выполненные задания» с других устройств.
-        // done может быть как map'ом {id: счётчик}, так и старым массивом id.
-        let changed = false;
-        const sync = (id, count) => {
-          if ((doneCache[id] || 0) < count) { doneCache[id] = count; changed = true; }
-        };
-        if (Array.isArray(d.done)) {
-          d.done.forEach((id) => sync(id, 1));
-        } else if (d.done && typeof d.done === 'object') {
-          Object.keys(d.done).forEach((id) => sync(id, Number(d.done[id]) || 1));
-        }
-        if (changed) {
-          localStorage.setItem(SELF_DOC_CACHE, JSON.stringify(doneCache));
-          if (lastTasks.length) renderTasks(lastTasks);
-        }
+      if (!snap.exists) {
+        ref.set({ vkId: String(vk.id), name: name, avatar: avatar, score: 0, done: {} })
+          .catch(() => {});
+        return;
+      }
+      const d = snap.data();
+      if (d.name !== name || d.avatar !== avatar) {
+        ref.set({ vkId: String(vk.id), name: name, avatar: avatar }, { merge: true })
+          .catch(() => {});
+      }
+      document.getElementById('score-num').textContent = d.score || 0;
+      // Синхронизируем «выполненные задания» с других устройств.
+      // done может быть как map'ом {id: счётчик}, так и старым массивом id.
+      let changed = false;
+      const sync = (id, count) => {
+        if ((doneCache[id] || 0) < count) { doneCache[id] = count; changed = true; }
+      };
+      if (Array.isArray(d.done)) {
+        d.done.forEach((id) => sync(id, 1));
+      } else if (d.done && typeof d.done === 'object') {
+        Object.keys(d.done).forEach((id) => sync(id, Number(d.done[id]) || 1));
+      }
+      if (changed) {
+        localStorage.setItem(SELF_DOC_CACHE, JSON.stringify(doneCache));
+        if (lastTasks.length) renderTasks(lastTasks);
       }
     },
     () => showToast('Не удаётся обновить счёт', true)
@@ -240,27 +244,45 @@ function renderSchedule() {
   if (window.feather) feather.replace();
 }
 
-/* Кнопка «Обновить» — единственное место, где участник читает schedule/current */
+/* Применить данные расписания (снапшот или кнопка «Обновить»): в кэш + перерисовать.
+   Формат как раньше: {events} или {days}. Возвращает false, если данных нет. */
+function applySchedule(data, showMsg) {
+  if (!data) return false;
+  const name = data.presetName || data.day || 'Расписание на сегодня';
+  if (Array.isArray(data.events)) {
+    localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify({ day: name, events: data.events }));
+    renderSchedule();
+    if (showMsg) showToast('Выставлено: ' + name);
+    return true;
+  }
+  if (Array.isArray(data.days)) {
+    localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify(data.days));
+    renderSchedule();
+    if (showMsg) showToast(name ? 'Выставлено: ' + name : 'Расписание обновлено');
+    return true;
+  }
+  return false;
+}
+
+/* Живое расписание: 1 документ schedule/current. Новый пресет появляется
+   у участников сразу после выставления (1 чтение на клиента при изменении). */
+function subscribeSchedule() {
+  listenWithFallback(
+    db.collection('schedule').doc('current'),
+    (snap) => {
+      if (snap.exists) applySchedule(snap.data(), false);
+    },
+    () => { /* молчим — останется кэш + кнопка «Обновить» */ }
+  );
+}
+
+/* Кнопка «Обновить» — ручной фолбэк к живой подписке */
 async function refreshSchedule() {
   if (DEV_MODE) { showToast('DEV_MODE: расписание из кода'); return; }
   if (!db) { showToast('Приложение ещё не готово, обнови страницу', true); return; }
   try {
     const snap = await db.collection('schedule').doc('current').get();
-    if (!snap.exists) {
-      showToast('Актуальное расписание ещё не загружено', true);
-      return;
-    }
-    const data = snap.data();
-    const name = data.presetName || data.day || 'Расписание на сегодня';
-    if (Array.isArray(data.events)) {
-      localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify({ day: name, events: data.events }));
-      renderSchedule();
-      showToast('Выставлено: ' + name);
-    } else if (Array.isArray(data.days)) {
-      localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify(data.days));
-      renderSchedule();
-      showToast(name ? 'Выставлено: ' + name : 'Расписание обновлено');
-    } else {
+    if (!snap.exists || !applySchedule(snap.exists ? snap.data() : null, true)) {
       showToast('Актуальное расписание ещё не загружено', true);
     }
   } catch (err) {
@@ -270,7 +292,11 @@ async function refreshSchedule() {
 
 /* ---------- Рейтинг топ-10 ----------
    БЕЗ live-подписки: живой топ-10 при 150 участниках множил бы чтения
-   (каждая запись балла топ-игрока → снапшот всем). Грузим по запросу. */
+   (каждая запись балла топ-игрока → снапшот всем). Грузим по запросу,
+   а повторные открытия вкладки/тыки по «Обновить» отдаём из кэша 60 сек —
+   спам-тапами дневной лимит чтений не пробить. */
+const RATING_CACHE_KEY = 'mw_rating_cache_v1';
+const RATING_TTL = 60 * 1000;
 let ratingData = [];
 let ratingLoading = false;
 
@@ -278,6 +304,14 @@ async function loadRating() {
   if (DEV_MODE || ratingLoading) return;
   if (!db) { showToast('Приложение ещё не готово, обнови страницу', true); return; }
   const wrap = document.getElementById('rating');
+  try {
+    const cached = JSON.parse(localStorage.getItem(RATING_CACHE_KEY) || 'null');
+    if (cached && Array.isArray(cached.list) && Date.now() - cached.ts < RATING_TTL) {
+      ratingData = cached.list;
+      renderRating();
+      return;
+    }
+  } catch (e) {}
   ratingLoading = true;
   if (wrap && !wrap.innerHTML.trim()) {
     wrap.innerHTML = '<div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>';
@@ -285,6 +319,7 @@ async function loadRating() {
   try {
     const snap = await db.collection('users').orderBy('score', 'desc').limit(10).get();
     ratingData = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+    try { localStorage.setItem(RATING_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: ratingData })); } catch (e) {}
     renderRating();
   } catch (err) {
     showToast('Рейтинг недоступен', true);
@@ -295,15 +330,35 @@ async function loadRating() {
 
 /* ---------- Задания ---------- */
 const SEEN_TASKS_KEY = 'mw_seen_tasks_v1';
+const TASKS_CACHE_KEY = 'mw_tasks_cache_v1';
+const TASKS_TTL = 15 * 60 * 1000;   // 15 минут: столько живой кэш заданий без чтения Firestore
 let seenTasks = new Set();
 let lastTasks = [];
 
+function tasksCache() {
+  try { return JSON.parse(localStorage.getItem(TASKS_CACHE_KEY) || 'null'); } catch (e) { return null; }
+}
+function tasksCacheFresh() {
+  const c = tasksCache();
+  return !!(c && Array.isArray(c.list) && c.ts && Date.now() - c.ts < TASKS_TTL);
+}
+
 function subscribeTasks(uid) {
   try { seenTasks = new Set(JSON.parse(localStorage.getItem(SEEN_TASKS_KEY) || '[]')); } catch (e) {}
+  const cached = tasksCache();
+  if (cached && Array.isArray(cached.list) && cached.list.length) renderTasks(cached.list);
+  if (tasksCacheFresh()) {
+    // Кэш свежий: не читаем Firestore при каждом входе (это ~30 чтений на сессию).
+    // Подключимся заново, когда кэш протухнет.
+    const wait = TASKS_TTL - (Date.now() - cached.ts) + 1000;
+    setTimeout(() => subscribeTasks(uid), Math.max(wait, 1000));
+    return;
+  }
   listenWithFallback(
     db.collection('tasks').where('active', '==', true).orderBy('createdAt', 'desc'),
     (snap) => {
       const fresh = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      try { localStorage.setItem(TASKS_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: fresh })); } catch (e) {}
       // Уведомление о новом задании — один раз за всё время, и не для сделанных
       fresh.forEach((t) => {
         if (taskDone(t)) return;
