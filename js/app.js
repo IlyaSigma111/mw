@@ -95,29 +95,38 @@ function escapeHtml(s) {
   }[c]));
 }
 
-/* Кнопка «Админ» в настройках: показываем только организаторам (VK ID из config/admins) */
 /* Кнопка «Админ» в настройках: показываем только организаторам (VK ID из config/admins).
+   Заодно ставим титул «Админ» в шапке вместо «участник слёта».
    Проверку кешируем в localStorage — не читаем config/admins при каждом запуске. */
 const ADMIN_CACHE_KEY = 'mw_admin_v1';
 
 async function maybeShowAdminBtn(vk) {
   const entry = document.getElementById('admin-entry');
-  if (!entry) return;
-  if (DEV_MODE) { entry.style.display = 'block'; return; }
+  const isAdmin = await isAdminUser(vk);
+  if (isAdmin) {
+    if (entry) entry.style.display = 'block';
+    const sub = document.querySelector('#hdr-name small');
+    if (sub) sub.textContent = 'админ';
+  }
+}
+
+async function isAdminUser(vk) {
+  if (DEV_MODE) return true;
   try {
     let cached = null;
     try { cached = localStorage.getItem(ADMIN_CACHE_KEY); } catch (e) {}
-    if (cached === '1') { entry.style.display = 'block'; return; }
+    if (cached === '1') return true;
     if (cached !== '0') {
       const snap = await db.collection('config').doc('admins').get();
       const ids = snap.exists && Array.isArray(snap.data().ids)
         ? snap.data().ids.map(String)
         : [];
-      const isAdmin = ids.includes(String(vk.id));
-      try { localStorage.setItem(ADMIN_CACHE_KEY, isAdmin ? '1' : '0'); } catch (e) {}
-      if (isAdmin) entry.style.display = 'block';
+      const ok = ids.includes(String(vk.id));
+      try { localStorage.setItem(ADMIN_CACHE_KEY, ok ? '1' : '0'); } catch (e) {}
+      return ok;
     }
-  } catch (err) { /* молчим — кнопка просто не покажется */ }
+  } catch (err) { /* молчим */ }
+  return false;
 }
 
 /* ---------- Realtime с фолбэком ----------
