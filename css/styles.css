@@ -4,25 +4,27 @@
    ============================================================ */
 
 :root {
-  --bg: #050505;
-  --card: #0D0E0E;
-  --card-2: #161817;
-  --line: #202321;
-  --line-green: rgba(0, 255, 65, 0.28);
-  --accent: #00FF41;
-  --accent-hover: #33FF66;
-  --accent-soft: rgba(0, 255, 65, 0.12);
+  --bg: #05060E;
+  --card: #0C0F1A;
+  --card-2: #141A2B;
+  --line: #232840;
+  --line-green: rgba(145, 199, 237, 0.28);
+  --accent: #91C7ED;
+  --accent-hover: #A9D6F5;
+  --accent-soft: rgba(145, 199, 237, 0.12);
+  --violet: #A119FF;
+  --violet-soft: rgba(161, 25, 255, 0.14);
   --gold: #F59E0B;
   --gold-soft: rgba(245, 158, 11, 0.13);
   --silver: #C0C0CC;
   --bronze: #CD7F32;
-  --text: #E9FFEF;
-  --muted: #7C8B81;
+  --text: #E9EEFF;
+  --muted: #8A92AC;
   --danger: #FF4D4D;
   --danger-soft: rgba(255, 77, 77, 0.12);
-  --success: #00FF41;
-  --glow: 0 0 18px rgba(0, 255, 65, 0.25);
-  --glow-strong: 0 0 26px rgba(0, 255, 65, 0.5);
+  --success: #91C7ED;
+  --glow: 0 0 18px rgba(161, 25, 255, 0.28);
+  --glow-strong: 0 0 26px rgba(161, 25, 255, 0.55);
   --shadow: 0 3px 0 rgba(0, 0, 0, 0.6);
   --radius: 16px;
   --radius-sm: 10px;
@@ -36,8 +38,8 @@ html, body { min-height: 100%; }
 body {
   background: var(--bg);
   background-image:
-    radial-gradient(1200px 600px at 85% -10%, rgba(0, 255, 65, 0.05), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(0, 255, 65, 0.04), transparent 60%);
+    radial-gradient(1200px 600px at 85% -10%, rgba(161, 25, 255, 0.06), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(139, 146, 227, 0.07), transparent 60%);
   background-attachment: fixed;
   color: var(--text);
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -130,7 +132,7 @@ body {
   padding: 6px 14px;
   border-radius: 999px;
   white-space: nowrap;
-  text-shadow: 0 0 10px rgba(0, 255, 65, 0.6);
+  text-shadow: 0 0 10px rgba(161, 25, 255, 0.6);
 }
 
 /* ---------- Секции ---------- */
@@ -156,15 +158,15 @@ body {
   border: none; cursor: pointer;
   font-family: inherit; font-size: 14px; font-weight: 700;
   padding: 12px 18px; border-radius: var(--radius-sm);
-  color: #001A00; background: var(--accent);
+  color: #0A0D1A; background: var(--accent);
   box-shadow: 0 2px 0 rgba(0,0,0,0.5), var(--glow);
 }
 .btn:hover { background: var(--accent-hover); box-shadow: 0 2px 0 rgba(0,0,0,0.5), var(--glow-strong); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 .btn-block { width: 100%; }
 .btn-sm { padding: 7px 12px; font-size: 13px; }
-.btn-ghost { background: var(--card-2); color: var(--accent); border: 1px solid var(--line-green); box-shadow: none; }
-.btn-ghost:hover { background: #1B1E1C; color: var(--accent-hover); box-shadow: none; }
+.btn-ghost {   background: var(--card-2); color: var(--accent); border: 1px solid var(--line-green); box-shadow: none; }
+.btn-ghost:hover { background: #1A2138; color: var(--accent-hover); box-shadow: none; }
 .btn-danger { background: var(--danger); color: #1A0000; box-shadow: 0 2px 0 rgba(0,0,0,0.5), 0 0 16px rgba(255,77,77,0.3); }
 .btn-danger:hover { background: #FF6666; }
 .btn-warn { background: var(--gold); color: #1A1200; box-shadow: 0 2px 0 rgba(0,0,0,0.5), 0 0 16px rgba(245,158,11,0.3); }
@@ -179,7 +181,7 @@ body {
   position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
   z-index: 60;
   display: flex; gap: 2px; padding: 7px;
-  background: rgba(13, 14, 14, 0.82);
+  background: rgba(12, 15, 26, 0.82);
   -webkit-backdrop-filter: blur(18px) saturate(1.5);
   backdrop-filter: blur(18px) saturate(1.5);
   border: 1px solid var(--line-green);
@@ -198,7 +200,7 @@ body {
 .dock-item:active { transform: scale(0.94); }
 .dock-item .feather { width: 22px; height: 22px; color: var(--muted); transition: color 0.2s; }
 .dock-item.on { color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--line-green); }
-.dock-item.on .feather { color: var(--accent); filter: drop-shadow(0 0 6px rgba(0, 255, 65, 0.6)); }
+.dock-item.on .feather { color: var(--accent); filter: drop-shadow(0 0 6px rgba(161, 25, 255, 0.6)); }
 
 /* ---------- Аккордеон расписания ---------- */
 .acc { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); background: var(--card); }
@@ -220,7 +222,7 @@ body {
   border-bottom: 1px dashed var(--line);
 }
 .ev:last-child { border-bottom: none; }
-.ev-time { color: var(--accent); font-weight: 700; font-size: 13px; min-width: 44px; font-variant-numeric: tabular-nums; text-shadow: 0 0 8px rgba(0,255,65,0.4); }
+.ev-time { color: var(--accent); font-weight: 700; font-size: 13px; min-width: 44px; font-variant-numeric: tabular-nums; text-shadow: 0 0 8px rgba(161,25,255,0.4); }
 .ev-title { color: var(--text); font-size: 14px; }
 
 /* ---------- Рейтинг ---------- */
@@ -248,7 +250,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; font-weight: 700;
 }
-.rate-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.rate-pts { margin-left: auto; color: var(--accent); font-weight: 800; font-size: 15px; text-shadow: 0 0 8px rgba(0,255,65,0.5); }
+.rate-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.rate-pts { margin-left: auto; color: var(--accent); font-weight: 800; font-size: 15px; text-shadow: 0 0 8px rgba(161,25,255,0.5); }
 .rate-me { outline: 1px solid var(--accent); box-shadow: var(--glow); }
 .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 18px 0; }
 
@@ -278,8 +280,8 @@ body {
   padding: 11px 13px; outline: none;
   transition: border-color 0.2s;
 }
-.input:focus, .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(0,255,65,0.3), var(--glow); }
-.input::placeholder { color: #4A524C; }
+.input:focus, .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(161,25,255,0.3), var(--glow); }
+.input::placeholder { color: #5A6280; }
 .textarea { resize: vertical; min-height: 80px; }
 
 /* ---------- Строки списков (админ) ---------- */
@@ -307,7 +309,7 @@ body {
   background: #fff; border-radius: 50%; transition: transform 0.2s var(--ease);
 }
 .switch input:checked + .slider { background: var(--accent); border-color: var(--accent); box-shadow: var(--glow); }
-.switch input:checked + .slider::before { transform: translateX(18px); background: #001A00; }
+.switch input:checked + .slider::before { transform: translateX(18px); background: #0A0D1A; }
 
 /* ---------- Настройки (локальные) ---------- */
 .set-row { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 2px 0; }
@@ -326,7 +328,7 @@ body {
   transition: transform 0.2s var(--ease), background 0.2s;
 }
 .sw.on { background: var(--accent); border-color: var(--accent); box-shadow: var(--glow); }
-.sw.on i { transform: translateX(19px); background: #001A00; }
+.sw.on i { transform: translateX(19px); background: #0A0D1A; }
 
 /* Имя в рейтинге: обрезка длинных имён */
 .rate-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -334,7 +336,7 @@ body {
 
 /* ---------- Бейджи ---------- */
 .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
-.badge-on { background: rgba(0,255,65,0.18); color: var(--accent); }
+.badge-on { background: rgba(161,25,255,0.18); color: var(--accent); }
 .badge-off { background: var(--danger-soft); color: var(--danger); }
 .badge-admin { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--line-green); }
 
@@ -345,7 +347,7 @@ body {
   padding: 16px; box-shadow: var(--shadow);
 }
 .stat:hover { border-color: var(--line-green); }
-.stat b { display: block; font-size: 26px; font-weight: 800; color: var(--accent); text-shadow: 0 0 12px rgba(0,255,65,0.5); }
+.stat b { display: block; font-size: 26px; font-weight: 800; color: var(--accent); text-shadow: 0 0 12px rgba(161,25,255,0.5); }
 .stat span { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
 
 /* ---------- Вкладки (админ) ---------- */
@@ -357,7 +359,7 @@ body {
   padding: 9px 14px; border-radius: 999px; cursor: pointer;
   transition: all 0.2s;
 }
-.tab-btn.on { background: var(--accent); color: #001A00; border-color: var(--accent); box-shadow: var(--glow); }
+.tab-btn.on { background: var(--accent); color: #0A0D1A; border-color: var(--accent); box-shadow: var(--glow); }
 
 /* ---------- Тост-уведомления ---------- */
 #toasts {
