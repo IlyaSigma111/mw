@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#12121A">
-  <title>РњРµРґРёР°РІРѕР»РЅApp</title>
+  <title>МедиаволнApp</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -22,104 +22,104 @@
   <div id="toasts"></div>
 
   <div class="shell">
-    <!-- Р’РµСЂС…РЅСЏСЏ РїР°РЅРµР»СЊ вЂ” РЅР° СѓСЂРѕРІРЅРµ С€Р°РїРєРё VK (РєСЂРµСЃС‚РёРє / в‹Ї СЃРїСЂР°РІР° РІРІРµСЂС…Сѓ) -->
+    <!-- Верхняя панель — на уровне шапки VK (крестик / ⋯ справа вверху) -->
     <header class="appbar">
-      <span class="appbar-logo"><i data-feather="activity"></i> РњРµРґРёР°РІРѕР»РЅApp</span>
+      <span class="appbar-logo"><i data-feather="activity"></i> МедиаволнApp</span>
     </header>
 
-    <!-- РЁР°РїРєР° СѓС‡Р°СЃС‚РЅРёРєР°: Р°РІР°С‚Р°СЂ, РёРјСЏ, Р±Р°Р»Р»С‹ -->
+    <!-- Шапка участника: аватар, имя, баллы -->
     <header class="hdr rise">
       <div id="hdr-avatar" class="hdr-avatar"></div>
-      <div id="hdr-name" class="hdr-name"><span>вЂ¦</span></div>
+      <div id="hdr-name" class="hdr-name"><span>…</span></div>
       <div class="hdr-score"><span id="score-num">0</span></div>
     </header>
 
-    <!-- Р РђРЎРџРРЎРђРќРР• (РѕС‚РєСЂС‹С‚Рѕ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ) -->
+    <!-- РАСПИСАНИЕ (открыто по умолчанию) -->
     <section class="sec tab-pane app-pane rise rise-1 active" data-tab="schedule">
       <div class="sec-head">
         <i data-feather="calendar"></i>
-        <h2>Р Р°СЃРїРёСЃР°РЅРёРµ</h2>
-        <button id="sched-refresh" class="link-btn" type="button" style="margin-left:auto" title="РћР±РЅРѕРІРёС‚СЊ РёР· Р°РґРјРёРЅРєРё">РћР±РЅРѕРІРёС‚СЊ</button>
+        <h2>Расписание</h2>
+        <button id="sched-refresh" class="link-btn" type="button" style="margin-left:auto" title="Обновить из админки">Обновить</button>
       </div>
       <div id="schedule">
         <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
       </div>
     </section>
 
-    <!-- Р—РђР”РђРќРРЇ -->
+    <!-- ЗАДАНИЯ -->
     <section class="sec tab-pane app-pane rise rise-2" data-tab="tasks">
       <div class="sec-head">
         <i data-feather="zap"></i>
-        <h2>Р—Р°РґР°РЅРёСЏ</h2>
+        <h2>Задания</h2>
       </div>
-      <div class="sec-sub">Р’С‹РїРѕР»РЅСЏР№ Рё РїРѕР»СѓС‡Р°Р№ Р±Р°Р»Р»С‹</div>
+      <div class="sec-sub">Выполняй и получай баллы</div>
       <div id="tasks"></div>
     </section>
 
-    <!-- Р Р•Р™РўРРќР“ -->
+    <!-- РЕЙТИНГ -->
     <section class="sec tab-pane app-pane rise rise-3" data-tab="rating">
       <div class="sec-head">
         <i data-feather="award"></i>
-        <h2>Р РµР№С‚РёРЅРі</h2>
-        <button id="rating-refresh" class="link-btn" type="button" style="margin-left:auto" title="РћР±РЅРѕРІРёС‚СЊ СЂРµР№С‚РёРЅРі">РћР±РЅРѕРІРёС‚СЊ</button>
+        <h2>Рейтинг</h2>
+        <button id="rating-refresh" class="link-btn" type="button" style="margin-left:auto" title="Обновить рейтинг">Обновить</button>
       </div>
-      <div class="sec-sub">РўРѕРї-10 В· РѕР±РЅРѕРІР»СЏРµС‚СЃСЏ РїРѕ РєРЅРѕРїРєРµ</div>
+      <div class="sec-sub">Топ-10 · обновляется по кнопке</div>
       <div id="rating">
         <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
       </div>
     </section>
 
-    <!-- Р‘Р•Р™Р”Р–Р (С„СѓРЅРєС†РёСЏ РїСЂРёРѕСЃС‚Р°РЅРѕРІР»РµРЅР°: РЅРµ РіСЂСѓР·РёС‚ Firestore; РєРѕРґ РІ app.js СЃРѕС…СЂР°РЅС‘РЅ) -->
+    <!-- БЕЙДЖИ (функция приостановлена: не грузит Firestore; код в app.js сохранён) -->
     <section class="sec tab-pane app-pane rise rise-4" data-tab="badges" style="display:none">
       <div class="sec-head">
         <i data-feather="star"></i>
-        <h2>РњРѕРё Р±РµР№РґР¶Рё</h2>
+        <h2>Мои бейджи</h2>
       </div>
-      <div class="sec-sub">РќР°РіСЂР°РґС‹ Р·Р° РґРѕСЃС‚РёР¶РµРЅРёСЏ РЅР° СЃР»С‘С‚Рµ</div>
+      <div class="sec-sub">Награды за достижения на слёте</div>
       <div id="badges"><div class="skel h18"></div></div>
     </section>
 
-    <!-- РќРђРЎРўР РћР™РљР (Р»РѕРєР°Р»СЊРЅРѕ, Р±РµР· Р‘Р”) -->
+    <!-- НАСТРОЙКИ (локально, без БД) -->
     <section class="sec tab-pane app-pane rise rise-5" data-tab="settings">
       <div class="sec-head">
         <i data-feather="settings"></i>
-        <h2>РќР°СЃС‚СЂРѕР№РєРё</h2>
+        <h2>Настройки</h2>
       </div>
-      <div class="sec-sub">РҐСЂР°РЅСЏС‚СЃСЏ РЅР° СѓСЃС‚СЂРѕР№СЃС‚РІРµ В· РІРёР±СЂР°С†РёСЏ СЂР°Р±РѕС‚Р°РµС‚ РІ РїСЂРёР»РѕР¶РµРЅРёРё Р’Рљ РЅР° С‚РµР»РµС„РѕРЅРµ</div>
+      <div class="sec-sub">Хранятся на устройстве · вибрация работает в приложении ВК на телефоне</div>
       <div class="card">
         <div class="set-row" data-set="vibe" role="button" tabindex="0">
-          <div class="grow"><b>Р’РёР±СЂР°С†РёСЏ</b><small>С‚Р°РєС‚РёР»СЊРЅС‹Р№ РѕС‚РєР»РёРє РЅР° РґРµР№СЃС‚РІРёСЏ</small></div>
+          <div class="grow"><b>Вибрация</b><small>тактильный отклик на действия</small></div>
           <div class="sw"><i></i></div>
         </div>
         <div class="set-row" data-set="sound" role="button" tabindex="0">
-          <div class="grow"><b>Р—РІСѓРє</b><small>РєРѕСЂРѕС‚РєРёРµ СЃРёРіРЅР°Р»С‹ РЅР° СЃРѕР±С‹С‚РёСЏ</small></div>
+          <div class="grow"><b>Звук</b><small>короткие сигналы на события</small></div>
           <div class="sw"><i></i></div>
         </div>
       </div>
       <div class="card" id="admin-entry" style="display:none">
         <button id="btn-admin-open" class="btn btn-ghost btn-block" type="button">
-          <i data-feather="sliders"></i> РџР°РЅРµР»СЊ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°
+          <i data-feather="sliders"></i> Панель администратора
         </button>
       </div>
     </section>
   </div>
 
-  <!-- Р”РѕРєР±Р°СЂ: Р Р°СЃРїРёСЃР°РЅРёРµ В· Р—Р°РґР°РЅРёСЏ В· Р РµР№С‚РёРЅРі В· РќР°СЃС‚СЂРѕР№РєРё -->
+  <!-- Докбар: Расписание · Задания · Рейтинг · Настройки -->
   <nav class="dock">
     <button class="dock-item on" data-tab="schedule" type="button">
-      <i data-feather="calendar"></i><span>Р Р°СЃРїРёСЃР°РЅРёРµ</span>
+      <i data-feather="calendar"></i><span>Расписание</span>
     </button>
     <button class="dock-item" data-tab="tasks" type="button">
-      <i data-feather="zap"></i><span>Р—Р°РґР°РЅРёСЏ</span>
+      <i data-feather="zap"></i><span>Задания</span>
     </button>
     <button class="dock-item" data-tab="rating" type="button">
-      <i data-feather="award"></i><span>Р РµР№С‚РёРЅРі</span>
+      <i data-feather="award"></i><span>Рейтинг</span>
     </button>
     <button class="dock-item" data-tab="badges" type="button">
-      <i data-feather="star"></i><span>Р‘РµР№РґР¶Рё</span>
+      <i data-feather="star"></i><span>Бейджи</span>
     </button>
     <button class="dock-item" data-tab="settings" type="button">
-      <i data-feather="settings"></i><span>РќР°СЃС‚СЂРѕР№РєРё</span>
+      <i data-feather="settings"></i><span>Настройки</span>
     </button>
   </nav>
 
@@ -128,7 +128,7 @@
   <script src="js/vk.js?v=6"></script>
   <script src="js/app.js?v=6"></script>
   <script>
-    /* Р’С…РѕРґ РІ Р°РґРјРёРЅРєСѓ РїРѕ deep-link: ...vk.com/app54716297#admin */
+    /* Вход в админку по deep-link: ...vk.com/app54716297#admin */
     (function () {
       var hash = location.hash || '';
       var deeplink = '';
