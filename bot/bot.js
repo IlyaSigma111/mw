@@ -112,7 +112,7 @@ async function sendSubmission(env, db, bucket, snap, peers) {
   for (const peer of peers) {
     const sent = await vkApi(env.VK_TOKEN, 'messages.send', {
       peer_id: peer,
-      random_id: `${Date.now()}-${Math.random()}`,
+      random_id: Math.floor(Math.random() * 0x7fffffff),
       message: buildCaption(sub),
       attachment,
     });
