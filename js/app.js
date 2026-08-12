@@ -558,10 +558,11 @@ function pickTaskPhoto(task) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
+  input.multiple = true;
   input.addEventListener('change', () => {
-    const file = input.files && input.files[0];
+    const files = input.files ? Array.from(input.files) : [];
     input.remove();
-    if (file) submitTaskWithPhoto(task, file);
+    if (files.length) submitTaskWithPhoto(task, files);
   });
   document.body.appendChild(input);
   input.click();
@@ -587,32 +588,39 @@ function compressImage(file) {
   });
 }
 
-async function submitTaskWithPhoto(task, file) {
+async function submitTaskWithPhoto(task, files) {
   const lim = taskLimit(task);
   const next = taskCount(task) + 1;
   if (next > lim) { showToast('Лимит выполнений исчерпан', true); vkFeedback('error'); return; }
   if (DEV_MODE) { showToast('DEV: фото-отправка', false); await doTask(task); return; }
   try {
     showToast('Готовлю фото…');
-    const blob = await compressImage(file);
-    const photoB64 = await blobToBase64(blob);
-    if (photoB64.length > PHOTO_B64_MAX) {
-      showToast('Фото слишком тяжёлое, выбери другое', true);
-      vkFeedback('error');
-      return;
+    const photoB64s = [];
+    for (const file of files) {
+      const blob = await compressImage(file);
+      const photoB64 = await blobToBase64(blob);
+      if (photoB64.length > PHOTO_B64_MAX) {
+        showToast('Одно из фото слишком тяжёлое, выбери другое', true);
+        vkFeedback('error');
+        return;
+      }
+      photoB64s.push(photoB64);
     }
-    await db.collection('submissions').add({
+    if (!photoB64s.length) throw new Error('нет фото');
+    const doc = {
       uid: myUid,
       vkId: myVkId,
       name: myName,
       taskId: task.id,
       taskText: task.text,
       points: task.points,
-      photoB64: photoB64,
+      photoB64s: photoB64s,
       sent: false,
       state: 'pending',
       ts: firebase.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+    if (photoB64s.length === 1) doc.photoB64 = photoB64s[0];
+    await db.collection('submissions').add(doc);
     showToast('Фото ушло в паблик!');
     await doTask(task);
   } catch (err) {

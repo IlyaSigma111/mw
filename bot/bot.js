@@ -58,23 +58,27 @@ async function vkApi(token, method, params) {
   return json.response;
 }
 
-async function uploadPhotoToPeer(token, groupId, peerId, buf, filename) {
+async function uploadPhotosToPeer(token, groupId, peerId, bufs, filenames) {
   const upload = await vkApi(token, 'photos.getMessagesUploadServer', {
     group_id: groupId,
     peer_id: peerId,
   });
-  const form = new FormData();
-  form.append('photo', new Blob([buf], { type: 'image/jpeg' }), filename);
-  const upRes = await fetch(upload.upload_url, { method: 'POST', body: form });
-  const upJson = await upRes.json();
-  if (!upJson.photo) throw new Error(`upload photo failed: ${JSON.stringify(upJson).slice(0, 300)}`);
-  const saved = await vkApi(token, 'photos.saveMessagesPhoto', {
-    server: upJson.server,
-    photo: upJson.photo,
-    hash: upJson.hash,
-  });
-  const p = saved[0];
-  return `photo${p.owner_id}_${p.id}_${p.access_key}`;
+  const attachments = [];
+  for (let i = 0; i < bufs.length; i++) {
+    const form = new FormData();
+    form.append('photo', new Blob([bufs[i]], { type: 'image/jpeg' }), filenames[i] || `photo${i + 1}.jpg`);
+    const upRes = await fetch(upload.upload_url, { method: 'POST', body: form });
+    const upJson = await upRes.json();
+    if (!upJson.photo) throw new Error(`upload photo failed: ${JSON.stringify(upJson).slice(0, 300)}`);
+    const saved = await vkApi(token, 'photos.saveMessagesPhoto', {
+      server: upJson.server,
+      photo: upJson.photo,
+      hash: upJson.hash,
+    });
+    const p = saved[0];
+    attachments.push(`photo${p.owner_id}_${p.id}_${p.access_key}`);
+  }
+  return attachments.join(',');
 }
 
 export function filterPeerList(convs) {
@@ -99,20 +103,22 @@ async function discoverPeers(token, configured) {
 
 async function sendSubmission(env, db, bucket, snap, peers) {
   const sub = snap.data();
-  let buf = null;
-  let filename = 'photo.jpg';
-  if (sub.photoB64) {
-    buf = Buffer.from(sub.photoB64, 'base64');
+  const bufs = [];
+  const filenames = [];
+  if (Array.isArray(sub.photoB64s) && sub.photoB64s.length) {
+    sub.photoB64s.forEach((b64) => bufs.push(Buffer.from(b64, 'base64')));
+  } else if (sub.photoB64) {
+    bufs.push(Buffer.from(sub.photoB64, 'base64'));
   } else if (sub.photoPath) {
-    [buf] = await bucket.file(sub.photoPath).download();
-    filename = sub.photoPath.split('/').pop() || 'photo.jpg';
+    [bufs[0]] = await bucket.file(sub.photoPath).download();
+    filenames.push(sub.photoPath.split('/').pop() || 'photo.jpg');
   }
-  if (!buf) {
+  if (!bufs.length) {
     await snap.ref.update({ sent: true, skipped: true, sentAt: FieldValue.serverTimestamp() });
     console.log(`skip ${snap.id} (no photo)`);
     return;
   }
-  const attachment = await uploadPhotoToPeer(env.VK_TOKEN, env.VK_GROUP_ID, peers[0], buf, filename);
+  const attachment = await uploadPhotosToPeer(env.VK_TOKEN, env.VK_GROUP_ID, peers[0], bufs, filenames);
   const msgIds = {};
   for (const peer of peers) {
     const sent = await vkApi(env.VK_TOKEN, 'messages.send', {
