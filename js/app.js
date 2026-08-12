@@ -589,9 +589,6 @@ function compressImage(file) {
 }
 
 async function submitTaskWithPhoto(task, files) {
-  const lim = taskLimit(task);
-  const next = taskCount(task) + 1;
-  if (next > lim) { showToast('Лимит выполнений исчерпан', true); vkFeedback('error'); return; }
   if (DEV_MODE) { showToast('DEV: фото-отправка', false); await doTask(task); return; }
   try {
     showToast('Готовлю фото…');
@@ -622,7 +619,6 @@ async function submitTaskWithPhoto(task, files) {
     if (photoB64s.length === 1) doc.photoB64 = photoB64s[0];
     await db.collection('submissions').add(doc);
     showToast('Фото ушло на модерацию!');
-    await doTask(task);
   } catch (err) {
     showToast('Не удалось отправить фото: ' + err.message, true);
   }
