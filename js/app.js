@@ -300,8 +300,21 @@ async function refreshSchedule() {
    спам-тапами дневной лимит чтений не пробить. */
 const RATING_CACHE_KEY = 'mw_rating_cache_v1';
 const RATING_TTL = 60 * 1000;
+// «Показать всех» читает ВСЕ документы участников (~150 чтений), поэтому кэш 30 минут:
+// повторные разворачивания не тратят ни одного чтения.
+const RATING_ALL_CACHE_KEY = 'mw_rating_all_cache_v1';
+const RATING_ALL_TTL = 30 * 60 * 1000;
 let ratingData = [];
+let ratingTop = [];        // топ-10 (последний ответ) — сворачиваемся обратно в него
+let ratingExpanded = false;
 let ratingLoading = false;
+
+function ratingAllCached() {
+  try {
+    const c = JSON.parse(localStorage.getItem(RATING_ALL_CACHE_KEY) || 'null');
+    return (c && Array.isArray(c.list) && Date.now() - c.ts < RATING_ALL_TTL) ? c.list : null;
+  } catch (e) { return null; }
+}
 
 async function loadRating() {
   if (DEV_MODE || ratingLoading) return;
@@ -310,7 +323,9 @@ async function loadRating() {
   try {
     const cached = JSON.parse(localStorage.getItem(RATING_CACHE_KEY) || 'null');
     if (cached && Array.isArray(cached.list) && Date.now() - cached.ts < RATING_TTL) {
-      ratingData = cached.list;
+      ratingTop = cached.list;
+      ratingData = ratingTop;
+      ratingExpanded = false;
       renderRating();
       return;
     }
@@ -321,8 +336,38 @@ async function loadRating() {
   }
   try {
     const snap = await db.collection('users').orderBy('score', 'desc').limit(10).get();
-    ratingData = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
-    try { localStorage.setItem(RATING_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: ratingData })); } catch (e) {}
+    ratingTop = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+    ratingData = ratingTop;
+    ratingExpanded = false;
+    try { localStorage.setItem(RATING_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: ratingTop })); } catch (e) {}
+    renderRating();
+  } catch (err) {
+    showToast('Рейтинг недоступен', true);
+  } finally {
+    ratingLoading = false;
+  }
+}
+
+/* «Показать всех»: разворачивает топ-10 до полного списка. ~150 чтений за свежий
+   запрос, но кэш 30 мин превращает повторные тыки в 0 чтений. */
+async function loadRatingAll() {
+  if (DEV_MODE || ratingLoading) return;
+  if (!db) { showToast('Приложение ещё не готово, обнови страницу', true); return; }
+  const all = ratingAllCached();
+  if (all) {
+    ratingData = all;
+    ratingExpanded = true;
+    renderRating();
+    return;
+  }
+  ratingLoading = true;
+  try {
+    const snap = await db.collection('users').orderBy('score', 'desc').get();
+    const fresh = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+    try { localStorage.setItem(RATING_ALL_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: fresh })); } catch (e) {}
+    ratingTop = fresh.slice(0, 10);
+    ratingData = fresh;
+    ratingExpanded = true;
     renderRating();
   } catch (err) {
     showToast('Рейтинг недоступен', true);
@@ -570,7 +615,7 @@ function renderRating(listOverride) {
     wrap.innerHTML = '<div class="empty">Пока никого нет — стань первым!</div>';
     return;
   }
-  wrap.innerHTML = list.map((u, i) => {
+  const rows = list.map((u, i) => {
     const rankCls = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
     const me = myVkId && String(u.vkId) === myVkId ? ' rate-me' : '';
     const avatar = u.avatar
@@ -587,6 +632,20 @@ function renderRating(listOverride) {
       '</div>'
     );
   }).join('');
+  const total = ratingAllCached() ? ratingAllCached().length : 0;
+  const more = ratingExpanded
+    ? '<div class="rate-more"><button id="rate-toggle" class="btn btn-ghost btn-block" type="button">Свернуть</button></div>'
+    : '<div class="rate-more"><button id="rate-toggle" class="btn btn-ghost btn-block" type="button">' +
+      (total > 10 ? 'Показать всех (' + total + ')' : 'Показать всех') + '</button></div>';
+  wrap.innerHTML = rows + more;
+  const tbtn = document.getElementById('rate-toggle');
+  if (tbtn) {
+    tbtn.addEventListener('click', () => {
+      vkFeedback('click');
+      if (ratingExpanded) { ratingExpanded = false; ratingData = ratingTop; renderRating(); }
+      else loadRatingAll();
+    });
+  }
 }
 
 /* ---------- Запуск ---------- */

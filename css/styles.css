@@ -230,6 +230,7 @@ body {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm);
 }
 .rate-row + .rate-row { margin-top: 8px; }
+.rate-more { margin-top: 12px; }
 .rate-row:hover { border-color: var(--line-green); }
 .rate-rank {
   width: 26px; height: 26px; flex-shrink: 0;
