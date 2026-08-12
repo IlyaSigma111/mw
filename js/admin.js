@@ -354,8 +354,31 @@ async function loadTasks() {
     const snap = await db.collection('tasks').orderBy('createdAt', 'desc').get();
     allTasks = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderTaskList();
+    syncTasksAggregate();
   } catch (err) {
     showToast('Не удалось загрузить задания: ' + err.message, true);
+  }
+}
+
+/* Публичный «агрегат» заданий: участники подписываются на один документ tasks/current
+   (1 чтение на вход), а не на запрос по A документам. Синхронится при каждой загрузке
+   заданий — т.е. после любого создания/редактирования/переключения/удаления. */
+async function syncTasksAggregate() {
+  try {
+    await db.doc('tasks/current').set({
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      list: allTasks.map((t) => ({
+        id: t.id,
+        text: t.text,
+        points: t.points,
+        active: !!t.active,
+        type: t.type === 'repeat' ? 'repeat' : 'once',
+        limit: Math.max(1, Number(t.limit) || 1),
+        day: String(t.day || ''),
+      })),
+    });
+  } catch (e) {
+    /* не критично для админ-панели */
   }
 }
 

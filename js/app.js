@@ -359,10 +359,13 @@ function subscribeTasks(uid) {
     return;
   }
   tasksSubscribed = true;
+  // Агрегат в tasks/current пишет админ (см. admin.js): 1 документ вместо A документов —
+  // это 1 чтение на вход при протухшем кэше, а не ~A.
   listenWithFallback(
-    db.collection('tasks').where('active', '==', true).orderBy('createdAt', 'desc'),
+    db.doc('tasks/current'),
     (snap) => {
-      const fresh = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const data = snap.data() || {};
+      const fresh = Array.isArray(data.list) ? data.list.filter((t) => t && t.active) : [];
       try { localStorage.setItem(TASKS_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: fresh })); } catch (e) {}
       // Уведомление о новом задании — один раз за всё время, и не для сделанных
       fresh.forEach((t) => {
