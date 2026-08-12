@@ -7,9 +7,10 @@
 const SELF_DOC_CACHE = 'mw_self_v1';   // кэш «я выполнял задания»
 const doneCache = JSON.parse(localStorage.getItem(SELF_DOC_CACHE) || '{}');
 
-let db, auth;
+let db, auth, storage;
 let myUid = '';    // users/<uid> текущего участника
 let myVkId = '';   // VK ID участника (общий для всех устройств)
+let myName = '';   // «Имя Фамилия» — подпись под фото
 let myScore = 0;   // текущие баллы (число или буквы, если их поставил админ)
 
 /* ---------- Тосты ---------- */
@@ -51,6 +52,7 @@ async function init() {
     //    один аккаунт ВК = один профиль (баллы, выполненные задания) на всех устройствах.
     myUid = DEV_MODE ? 'dev-user' : 'vk_' + String(vk.id);
     myVkId = DEV_MODE ? '' : String(vk.id);
+    myName = DEV_MODE ? 'DEV-пользователь' : (vk.first_name + ' ' + vk.last_name).trim();
 
     // 4. Рендер + подписки
     renderHeader(vk);
@@ -485,6 +487,8 @@ function renderTasks(list) {
       '<span class="task-text">' + escapeHtml(t.text) + dayChip + '</span>' +
       '<span class="task-pts">+' + t.points + progress + '</span>' +
       '<button class="btn btn-sm" data-act="do">' + (cnt > 0 ? 'Ещё раз' : 'Выполнить') + '</button>' +
+      '<button class="btn btn-sm btn-photo" data-act="photo" title="Сфоткать и отправить в паблик">' +
+      '<i data-feather="camera"></i></button>' +
       '</div>'
     );
   }).join('') +
@@ -499,6 +503,15 @@ function renderTasks(list) {
       const task = list.find((t) => t.id === id);
       btn.disabled = true;
       await doTask(task);
+    });
+  });
+  wrap.querySelectorAll('[data-act="photo"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const card = btn.closest('.task');
+      const id = card.dataset.id;
+      const task = list.find((t) => t.id === id);
+      vkFeedback('click');
+      pickTaskPhoto(task);
     });
   });
   if (window.feather) feather.replace();
@@ -533,6 +546,85 @@ async function doTask(task) {
     showToast('Задание выполнено: +' + task.points + ' баллов' + (next < lim ? ' (' + next + '/' + lim + ')' : ''));
   } catch (err) {
     showToast('Не удалось выполнить: ' + err.message, true);
+  }
+}
+
+/* ---------- Фото-отправка заданий ----------
+   «Сфоткать»: камера/галерея → сжатие на клиенте до ~1280px JPEG (~200КБ,
+   чтобы не выжигать бесплатный канал Storage) → Firebase Storage
+   (photos/<uid>/<ts>.jpg) → заявка submissions/{id}. Бот публикует её
+   в паблик с хештегом задания (см. bot.js). */
+const PHOTO_MAX_W = 1280;
+const PHOTO_QUALITY = 0.8;
+
+function initStorage() {
+  if (!DEV_MODE && !storage) storage = firebase.storage();
+}
+
+function pickTaskPhoto(task) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.addEventListener('change', () => {
+    const file = input.files && input.files[0];
+    input.remove();
+    if (file) submitTaskWithPhoto(task, file);
+  });
+  document.body.appendChild(input);
+  input.click();
+}
+
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, PHOTO_MAX_W / (img.width || 1));
+      const w = Math.max(1, Math.round((img.width || 1) * scale));
+      const h = Math.max(1, Math.round((img.height || 1) * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('сжатие не удалось'))), 'image/jpeg', PHOTO_QUALITY);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('не удалось прочитать фото')); };
+    img.src = url;
+  });
+}
+
+async function submitTaskWithPhoto(task, file) {
+  const lim = taskLimit(task);
+  const next = taskCount(task) + 1;
+  if (next > lim) { showToast('Лимит выполнений исчерпан', true); vkFeedback('error'); return; }
+  if (typeof myScore === 'string') {
+    showToast('У тебя буквы — задания больше не начисляют баллы', true);
+    vkFeedback('error');
+    return;
+  }
+  if (DEV_MODE) { showToast('DEV: фото-отправка', false); await doTask(task); return; }
+  try {
+    showToast('Готовлю фото…');
+    const blob = await compressImage(file);
+    initStorage();
+    const photoPath = 'photos/' + myUid + '/' + Date.now() + '.jpg';
+    await storage.ref(photoPath).put(blob);
+    await db.collection('submissions').add({
+      uid: myUid,
+      vkId: myVkId,
+      name: myName,
+      taskId: task.id,
+      taskText: task.text,
+      points: task.points,
+      photoPath: photoPath,
+      sent: false,
+      ts: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showToast('Фото ушло в паблик!');
+    await doTask(task);
+  } catch (err) {
+    showToast('Не удалось отправить фото: ' + err.message, true);
   }
 }
 

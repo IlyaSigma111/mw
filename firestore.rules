@@ -36,6 +36,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ---------- Фото-заявки ----------
+    // Создаёт участник (uid = "vk_<vkId>", как в users/). Читает/правит бот
+    // (сервисный аккаунт — правила не применяются) и админ.
+    match /submissions/{doc} {
+      allow create: if request.auth != null &&
+        request.resource.data.uid == 'vk_' + request.resource.data.vkId;
+      allow read, update, delete: if isAdmin();
+    }
+
     // ---------- Бейджи ----------
     // Картинка хранится сжатым dataURL внутри документа (лимит 1 МБ).
     // Выдача участнику — массив id в users/{userId}.badges.

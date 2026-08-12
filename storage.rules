@@ -1,0 +1,12 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Фото заданий: участник загружает только в свою папку photos/<uid>/.
+    // Чтение/удаление — только бот (сервисный аккаунт, правила не применяются)
+    // и админ через консоль; веб-клиентам чтение закрыто.
+    match /photos/{uid}/{file} {
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow read, update, delete: if false;
+    }
+  }
+}

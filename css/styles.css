@@ -264,6 +264,8 @@ body {
 .task.done { opacity: 0.5; }
 .task.done .task-text { text-decoration: line-through; }
 .task-text { flex: 1; font-size: 14px; }
+.btn-photo { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; }
+.btn-photo i { width: 16px; height: 16px; }
 .task-new { outline: 1px solid var(--success); }
 
 /* ---------- Формы / поля ---------- */
