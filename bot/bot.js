@@ -171,10 +171,10 @@ export async function runBot(env) {
   const cfgSnap = await cfgRef.get();
   if (configured && configured.length) {
     peers = configured.map(Number).filter((n) => Number.isFinite(n));
-  } else if (cfgSnap.exists && cfgSnap.data().peers && cfgSnap.data().peers.length) {
-    peers = cfgSnap.data().peers;
   } else {
-    peers = await discoverPeers(VK_TOKEN, null);
+    const discovered = await discoverPeers(VK_TOKEN, null);
+    const cached = (cfgSnap.exists && cfgSnap.data().peers) || [];
+    peers = [...new Set([...discovered, ...cached])];
     await cfgRef.set({ peers, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   }
   console.log(`peers: ${peers.join(', ')}`);
