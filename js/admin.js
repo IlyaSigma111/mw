@@ -376,6 +376,7 @@ async function syncTasksAggregate() {
         limit: Math.max(1, Number(t.limit) || 1),
         day: String(t.day || ''),
         withPhoto: !!t.withPhoto,
+        withVideo: !!t.withVideo,
       })),
     });
   } catch (e) {
@@ -389,6 +390,7 @@ function taskMeta(t) {
   if (t.type === 'repeat') bits.push('повтор · до ' + Math.max(1, t.limit || 3) + ' раз');
   if (t.day && String(t.day).trim()) bits.push('день: ' + escapeHtml(t.day));
   if (t.withPhoto) bits.push('📷 фото');
+  if (t.withVideo) bits.push('🎥 видео');
   return bits.length ? ' · ' + bits.join(' · ') : '';
 }
 
@@ -440,9 +442,10 @@ async function createTask(text, points, opts) {
   const limit = type === 'repeat' ? Math.max(1, Number(opts.limit) || 1) : 1;
   const day = String(opts.day || '').trim();
   const withPhoto = !!opts.withPhoto;
+  const withVideo = !!opts.withVideo;
   try {
     if (DEV_MODE) {
-      allTasks.unshift({ id: 'dev-' + Date.now(), text: text, points: points, active: true, type: type, limit: limit, day: day, withPhoto: withPhoto });
+      allTasks.unshift({ id: 'dev-' + Date.now(), text: text, points: points, active: true, type: type, limit: limit, day: day, withPhoto: withPhoto, withVideo: withVideo });
       renderTaskList(); showToast('DEV: задание добавлено'); return;
     }
     await db.collection('tasks').add({
@@ -453,6 +456,7 @@ async function createTask(text, points, opts) {
       limit: limit,
       day: day,
       withPhoto: withPhoto,
+      withVideo: withVideo,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     showToast('Задание создано');
@@ -490,6 +494,7 @@ function openTaskEditor(id) {
     '<input id="et-day" class="input" value="' + escapeHtml(t.day || '') + '" placeholder="Любой день · День 1 · 2026-08-15"></div>' +
     '<label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="et-active"' + (t.active ? ' checked' : '') + '> Задание активно</label>' +
     '<label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="et-photo"' + (t.withPhoto ? ' checked' : '') + '> Требовать фото от участника (кнопка 📷)</label>' +
+    '<label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="et-video"' + (t.withVideo ? ' checked' : '') + '> Требовать видео от участника (кнопка 🎥)</label>' +
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
     '<button id="et-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
     '<button id="et-save" class="btn" type="button">Сохранить</button>' +
@@ -511,12 +516,13 @@ async function saveTaskEdit() {
   const day = document.getElementById('et-day').value.trim();
   const active = document.getElementById('et-active').checked;
   const withPhoto = document.getElementById('et-photo').checked;
+  const withVideo = document.getElementById('et-video').checked;
   if (!text) { showToast('Введи текст задания', true); return; }
   if (!points || points < 1) { showToast('Баллы ≥ 1', true); return; }
   try {
     if (DEV_MODE) {
       const t = allTasks.find((x) => x.id === editTaskId);
-      if (t) Object.assign(t, { text: text, points: points, type: type, limit: limit, day: day, active: active, withPhoto: withPhoto });
+      if (t) Object.assign(t, { text: text, points: points, type: type, limit: limit, day: day, active: active, withPhoto: withPhoto, withVideo: withVideo });
       renderTaskList();
     } else {
       await db.collection('tasks').doc(editTaskId).update({
@@ -527,6 +533,7 @@ async function saveTaskEdit() {
         day: day,
         active: active,
         withPhoto: withPhoto,
+        withVideo: withVideo,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
     }
@@ -592,8 +599,10 @@ function renderUsers() {
   }
   wrap.innerHTML = list.map((u) =>
     '<div class="row-item">' +
-    '<div class="grow"><b>' + escapeHtml(u.name || 'Без имени') + '</b>' +
-    '<small>VK ID: ' + escapeHtml(String(u.vkId || '—')) + ' · баллов: ' + (u.score || 0) + '</small></div>' +
+    '<div class="grow"><b>' + escapeHtml(u.name || 'Без имени') +
+    (u.role === 'organizer' ? ' <span class="badge badge-admin">организатор</span>' : '') + '</b>' +
+    '<small>VK ID: ' + escapeHtml(String(u.vkId || '—')) + ' · баллов: ' + (u.score || 0) +
+    (u.district ? ' · ' + escapeHtml(u.district) : '') + '</small></div>' +
     '<div class="row-actions">' +
     '<button class="btn btn-ghost btn-sm" data-pm="' + u.uid + '" type="button">−1</button>' +
     '<button class="btn btn-ghost btn-sm" data-pp="' + u.uid + '" type="button">+1</button>' +
@@ -713,13 +722,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const limit = Number(document.getElementById('task-limit').value);
     const day = document.getElementById('task-day').value;
     const withPhoto = document.getElementById('task-photo').checked;
+    const withVideo = document.getElementById('task-video').checked;
     const rows = parseTaskLines(raw, defPoints);
     if (!rows.length) { showToast('Введи текст задания', true); return; }
     if (rows.some((r) => !r.points || r.points < 1)) {
       showToast('Баллы ≥ 1: задай поле «Баллы» или «| N» в строке', true);
       return;
     }
-    rows.forEach((r) => createTask(r.text, r.points, { type: type, limit: limit, day: day, withPhoto: withPhoto }));
+    rows.forEach((r) => createTask(r.text, r.points, { type: type, limit: limit, day: day, withPhoto: withPhoto, withVideo: withVideo }));
     document.getElementById('task-text').value = '';
     document.getElementById('task-day').value = '';
   });

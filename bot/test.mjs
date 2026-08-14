@@ -1,4 +1,4 @@
-import { parseDecision, buildCaption, buildStatusText, findDecisionMessages, filterPeerList } from './bot.js';
+import { parseDecision, buildCaption, buildStatusText, findDecisionMessages, filterPeerList, joinChunks } from './bot.js';
 
 let pass = 0;
 const cases = [
@@ -28,8 +28,44 @@ for (const [input, want] of cases) {
 }
 
 const cap = buildCaption({ taskId: 7, taskText: 'Селфи с розой', points: 50, name: 'Илюха' });
-if (!cap.includes('№7') || !cap.includes('Селфи с розой') || !cap.includes('+50') || !cap.includes('Илюха')) {
+if (!cap.includes('Фото с задания №7') || !cap.includes('Селфи с розой') || !cap.includes('+50') || !cap.includes('Илюха')) {
   console.log('FAIL buildCaption:', cap);
+  process.exitCode = 1;
+} else pass++;
+
+const capVideo = buildCaption({ taskId: 8, taskText: 'Сними визитку', points: 20, name: 'Аня', mediaType: 'video' });
+if (!capVideo.includes('Видео с задания №8') || !capVideo.includes('Сними визитку')) {
+  console.log('FAIL buildCaption video:', capVideo);
+  process.exitCode = 1;
+} else pass++;
+
+const capMixed = buildCaption({ taskId: 9, taskText: 'Фото и видео', points: 30, name: 'Боря', mediaType: 'mixed' });
+if (!capMixed.includes('Фото+видео с задания №9')) {
+  console.log('FAIL buildCaption mixed:', capMixed);
+  process.exitCode = 1;
+} else pass++;
+
+const enc = (s) => Buffer.from(s, 'utf8').toString('base64');
+const joined = joinChunks([enc('Пр'), enc('иве'), enc('т!')], 3);
+if (!joined || joined.toString('utf8') !== 'Привет!') {
+  console.log('FAIL joinChunks reassembly:', joined && joined.toString('utf8'));
+  process.exitCode = 1;
+} else pass++;
+
+const single = joinChunks([enc('один чанк')], 1);
+if (!single || single.toString('utf8') !== 'один чанк') {
+  console.log('FAIL joinChunks single');
+  process.exitCode = 1;
+} else pass++;
+
+const missing = joinChunks([enc('ab'), '', enc('cd')], 3);
+if (!missing || missing.toString('utf8') !== 'abcd') {
+  console.log('FAIL joinChunks missing middle');
+  process.exitCode = 1;
+} else pass++;
+
+if (joinChunks([], 0) !== null) {
+  console.log('FAIL joinChunks empty');
   process.exitCode = 1;
 } else pass++;
 

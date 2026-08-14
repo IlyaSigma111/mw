@@ -329,6 +329,24 @@ body {
 }
 .sw.on { background: var(--accent); border-color: var(--accent); box-shadow: var(--glow); }
 .sw.on i { transform: translateX(19px); background: #0A0D1A; }
+.set-row > .feather { color: var(--accent); flex-shrink: 0; }
+
+/* ---------- Выбор округа ---------- */
+.district-list { max-height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.district-opt {
+  width: 100%; text-align: left;
+  background: var(--card-2); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600;
+  padding: 12px 14px; cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.12s var(--ease);
+}
+.district-opt:active { transform: scale(0.98); border-color: var(--line-green); background: #1A2138; }
+.district-opt-sep { border-top: 1px dashed var(--line); margin: 4px 0; }
+.district-opt.opt-org {
+  display: flex; flex-direction: column; gap: 2px;
+  border-color: var(--line-green); background: linear-gradient(135deg, rgba(161,25,255,0.10), rgba(0,224,122,0.06));
+}
+.district-opt.opt-org small { font-weight: 500; color: var(--muted); }
 
 /* Имя в рейтинге: обрезка длинных имён */
 .rate-name { display: flex; align-items: center; gap: 6px; min-width: 0; }

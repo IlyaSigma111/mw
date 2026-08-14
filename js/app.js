@@ -12,6 +12,14 @@ let myUid = '';    // users/<uid> текущего участника
 let myVkId = '';   // VK ID участника (общий для всех устройств)
 let myName = '';   // «Имя Фамилия» — подпись под фото
 let myScore = 0;   // текущие баллы
+let myDistrict = '';    // округ участника
+let myRole = 'student';          // 'student' | 'organizer' (роль из пикера округа)
+let myShowInRating = true;       // участник: всегда true; организатор: по умолчанию false
+let myIsAdmin = false;  // админ панели (VK ID в config/admins) — отдельно от роли в рейтинге
+
+const ROLE_ORGANIZER = 'organizer';
+const ROLE_STUDENT = 'student';
+let mediaSubmitting = false;  // защита от двойной отправки медиа
 
 /* ---------- Тосты ---------- */
 function showToast(text, isErr) {
@@ -56,6 +64,9 @@ async function init() {
 
     // 4. Рендер + подписки
     renderHeader(vk);
+    try { myDistrict = localStorage.getItem(DISTRICT_KEY) || ''; } catch (e) {}
+    updateHeaderSub();
+    renderDistrictVal();
     renderSchedule();
     renderTasks(DEFAULT_TASKS_EMPTY);
     initDock();
@@ -105,9 +116,19 @@ async function maybeShowAdminBtn(vk) {
   const isAdmin = await isAdminUser(vk);
   if (isAdmin) {
     if (entry) entry.style.display = 'block';
-    const sub = document.querySelector('#hdr-name small');
-    if (sub) sub.textContent = 'админ';
+    myIsAdmin = true;
   }
+  updateHeaderSub();
+}
+
+/* Подпись под именем в шапке: «участник слёта · Округ», «организатор · Округ» или «админ · Округ» */
+function updateHeaderSub() {
+  const sub = document.querySelector('#hdr-name small');
+  if (!sub) return;
+  const roleLabel = myIsAdmin ? 'админ' : (myRole === ROLE_ORGANIZER ? 'организатор' : 'участник слёта');
+  const parts = [roleLabel];
+  if (myDistrict) parts.push(myDistrict);
+  sub.textContent = parts.join(' · ');
 }
 
 async function isAdminUser(vk) {
@@ -176,8 +197,9 @@ function subscribeScore(uid, vk) {
     ref,
     (snap) => {
       if (!snap.exists) {
-        ref.set({ vkId: String(vk.id), name: name, avatar: avatar, score: 0, done: {} })
+        ref.set({ vkId: String(vk.id), name: name, avatar: avatar, score: 0, done: {}, role: ROLE_STUDENT, showInRating: true })
           .catch(() => {});
+        ensureDistrict({});
         return;
       }
       const d = snap.data();
@@ -187,6 +209,10 @@ function subscribeScore(uid, vk) {
       }
       myScore = d.score || 0;
       document.getElementById('score-num').textContent = myScore;
+      myRole = d.role === ROLE_ORGANIZER ? ROLE_ORGANIZER : ROLE_STUDENT;
+      myShowInRating = myRole === ROLE_ORGANIZER ? d.showInRating !== false : true;
+      ensureDistrict(d);
+      renderRatingToggle();
       // Синхронизируем «выполненные задания» с других устройств.
       // done может быть как map'ом {id: счётчик}, так и старым массивом id.
       let changed = false;
@@ -210,6 +236,100 @@ function subscribeScore(uid, vk) {
 function setScore(n) {
   myScore = n;
   document.getElementById('score-num').textContent = n;
+}
+
+/* ---------- Округ участника ----------
+   Команды приезжают из разных округов Тюменской области (список из
+   «Кабинета шеф-редактора»). При первом входе показываем выбор округа,
+   сохраняем в профиль users/{uid}.district и показываем в шапке/админке. */
+const DISTRICT_KEY = 'mw_district_v1';
+const DISTRICT_ASKED_KEY = 'mw_district_asked_v1';
+let districtPickerOpen = false;
+
+function renderDistrictVal() {
+  const el = document.getElementById('set-district-val');
+  if (el) el.textContent = myDistrict || 'не выбран';
+}
+
+function ensureDistrict(d) {
+  const district = d && d.district && String(d.district).trim();
+  if (district) {
+    myDistrict = district;
+    myRole = d && d.role === ROLE_ORGANIZER ? ROLE_ORGANIZER : ROLE_STUDENT;
+    myShowInRating = myRole === ROLE_ORGANIZER
+      ? (d ? d.showInRating !== false : myShowInRating)
+      : true;
+    try { localStorage.setItem(DISTRICT_KEY, myDistrict); } catch (e) {}
+  } else {
+    try { localStorage.setItem(DISTRICT_ASKED_KEY, '1'); } catch (e) {}
+    showDistrictPicker();
+  }
+  updateHeaderSub();
+  renderDistrictVal();
+}
+
+function showDistrictPicker() {
+  if (districtPickerOpen || !(typeof DISTRICTS !== 'undefined' && DISTRICTS.length)) return;
+  districtPickerOpen = true;
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.id = 'district-modal';
+  back.innerHTML =
+    '<div class="modal">' +
+    '<div class="field"><label>Откуда ты приехал?</label>' +
+    '<p class="hint" style="margin:0 0 10px">Выбери свой округ — он появится в профиле и в админке.</p></div>' +
+    '<div class="district-list">' +
+    DISTRICTS.map((d) => '<button class="district-opt" data-d="' + escapeHtml(d) + '" type="button">' + escapeHtml(d) + '</button>').join('') +
+    '<div class="district-opt-sep" aria-hidden="true"></div>' +
+    '<button class="district-opt opt-org" data-d="Организатор" data-org="1" type="button">' +
+    '<span>🎓 Организатор</span><small>не участвует в рейтинге (можно включить в настройках)</small></button>' +
+    '</div></div>';
+  document.body.appendChild(back);
+  back.querySelectorAll('.district-opt').forEach((b) => {
+    b.addEventListener('click', async () => {
+      const name = b.dataset.d;
+      closeDistrictPicker();
+      await saveDistrict(name);
+    });
+  });
+}
+
+function closeDistrictPicker() {
+  districtPickerOpen = false;
+  const m = document.getElementById('district-modal');
+  if (m) m.remove();
+}
+
+async function saveDistrict(name) {
+  const isOrg = name === 'Организатор';
+  const role = isOrg ? ROLE_ORGANIZER : ROLE_STUDENT;
+  const showInRating = !isOrg;   // организатор по умолчанию скрыт из рейтинга
+  if (DEV_MODE) {
+    myDistrict = name;
+    myRole = role;
+    myShowInRating = showInRating;
+    updateHeaderSub();
+    renderDistrictVal();
+    renderRatingToggle();
+    showToast('Округ: ' + name);
+    return;
+  }
+  try { localStorage.setItem(DISTRICT_ASKED_KEY, '1'); localStorage.setItem(DISTRICT_KEY, name); } catch (e) {}
+  myDistrict = name;
+  myRole = role;
+  myShowInRating = showInRating;
+  updateHeaderSub();
+  renderDistrictVal();
+  renderRatingToggle();
+  try {
+    // score/vkId передаём явно — правило users требует их в update
+    await db.collection('users').doc(myUid).update({
+      district: name, role: role, showInRating: showInRating, score: myScore, vkId: String(vk.id),
+    });
+    showToast('Округ сохранён: ' + name);
+  } catch (err) {
+    showToast('Округ не сохранился: ' + err.message, true);
+  }
 }
 
 /* ---------- Расписание ---------- */
@@ -327,6 +447,13 @@ function ratingAllCached() {
   } catch (e) { return null; }
 }
 
+/* Организаторы (роль из пикера) скрыты из рейтинга по умолчанию; тумблер
+   «Показываться в рейтинге» в настройках доступен только им. Обычные ученики
+   не имеют поля showInRating / всегда true — пропускаем только явное false. */
+function ratingVisible(u) {
+  return u.showInRating !== false;
+}
+
 async function loadRating() {
   if (DEV_MODE || ratingLoading) return;
   if (!db) { showToast('Приложение ещё не готово, обнови страницу', true); return; }
@@ -334,7 +461,7 @@ async function loadRating() {
   try {
     const cached = JSON.parse(localStorage.getItem(RATING_CACHE_KEY) || 'null');
     if (cached && Array.isArray(cached.list) && Date.now() - cached.ts < RATING_TTL) {
-      ratingTop = cached.list;
+      ratingTop = cached.list.filter(ratingVisible);
       ratingData = ratingTop;
       ratingExpanded = false;
       renderRating();
@@ -347,7 +474,7 @@ async function loadRating() {
   }
   try {
     const snap = await db.collection('users').orderBy('score', 'desc').limit(10).get();
-    ratingTop = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+    ratingTop = snap.docs.map((d) => ({ uid: d.id, ...d.data() })).filter(ratingVisible);
     ratingData = ratingTop;
     ratingExpanded = false;
     try { localStorage.setItem(RATING_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: ratingTop })); } catch (e) {}
@@ -366,7 +493,7 @@ async function loadRatingAll() {
   if (!db) { showToast('Приложение ещё не готово, обнови страницу', true); return; }
   const all = ratingAllCached();
   if (all) {
-    ratingData = all;
+    ratingData = all.filter(ratingVisible);
     ratingExpanded = true;
     renderRating();
     return;
@@ -374,7 +501,7 @@ async function loadRatingAll() {
   ratingLoading = true;
   try {
     const snap = await db.collection('users').orderBy('score', 'desc').get();
-    const fresh = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+    const fresh = snap.docs.map((d) => ({ uid: d.id, ...d.data() })).filter(ratingVisible);
     try { localStorage.setItem(RATING_ALL_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: fresh })); } catch (e) {}
     ratingTop = fresh.slice(0, 10);
     ratingData = fresh;
@@ -479,12 +606,15 @@ function renderTasks(list) {
     const lim = taskLimit(t);
     const progress = t.type === 'repeat' ? ' <span class="badge badge-on">' + cnt + '/' + lim + '</span>' : '';
     const dayChip = t.day && String(t.day).trim() ? ' <span class="badge badge-off">' + escapeHtml(t.day) + '</span>' : '';
-    const btnLabel = t.withPhoto ? (cnt > 0 ? 'Ещё раз' : 'Прикрепить фото') : (cnt > 0 ? 'Ещё раз' : 'Выполнить');
+    const isMedia = !!(t.withPhoto || t.withVideo);
+    const mediaIcon = isMedia ? '<i data-feather="' + (t.withVideo ? 'video' : 'camera') + '"></i>' : '';
+    const mediaLabel = t.withPhoto && t.withVideo ? 'Прикрепить файлы' : (t.withVideo ? 'Прикрепить видео' : 'Прикрепить фото');
+    const btnLabel = isMedia ? (cnt > 0 ? 'Ещё раз' : mediaLabel) : (cnt > 0 ? 'Ещё раз' : 'Выполнить');
     return (
       '<div class="card task rise" data-id="' + t.id + '">' +
       '<span class="task-text">' + escapeHtml(t.text) + dayChip + '</span>' +
       '<span class="task-pts">+' + t.points + progress + '</span>' +
-      '<button class="btn btn-sm' + (t.withPhoto ? ' btn-photo' : '') + '" data-act="do">' + btnLabel + '</button>' +
+      '<button class="btn btn-sm' + (isMedia ? ' btn-photo' : '') + '" data-act="do">' + mediaIcon + btnLabel + '</button>' +
       '</div>'
     );
   }).join('') +
@@ -498,11 +628,17 @@ function renderTasks(list) {
       const id = card.dataset.id;
       const task = list.find((t) => t.id === id);
       btn.disabled = true;
-      if (task.withPhoto) {
-        vkFeedback('click');
-        pickTaskPhoto(task);
-      } else {
-        await doTask(task);
+      try {
+        if (task.withPhoto || task.withVideo) {
+          if (mediaSubmitting) return;
+          mediaSubmitting = true;
+          vkFeedback('click');
+          try { await pickTaskMedia(task); } finally { mediaSubmitting = false; }
+        } else {
+          await doTask(task);
+        }
+      } finally {
+        renderTasks(lastTasks);   // кнопки пересоздаются — никогда не остаются «погасшими»
       }
     });
   });
@@ -536,36 +672,77 @@ async function doTask(task) {
   }
 }
 
-/* ---------- Фото-отправка заданий ----------
-   «Сфоткать»: камера/галерея → сжатие на клиенте (~1280px JPEG,
-   ~200КБ) → base64 прямо в документ заявки submissions/{id}
-   (Storage в проекте не включён; лимит Firestore 1МБ на документ).
-   Бот публикует фото в паблик (см. bot.js). */
+/* ---------- Медиа-отправка заданий ----------
+   Фото: камера/галерея → сжатие на клиенте (~1280px JPEG, ~200КБ) →
+   base64 в документ заявки submissions/{id} (Storage не включён,
+   лимит Firestore 1МБ на документ).
+   Видео: тоже base64, но большие ролики режутся на чанки в подколлекции
+   submissions/{id}/chunks (каждый документ < 1МБ), бот собирает обратно.
+   Бот публикует медиа модератору в VK (см. bot.js). */
 const PHOTO_MAX_W = 1280;
 const PHOTO_QUALITY = 0.8;
-const PHOTO_B64_MAX = 800000;   // ~600КБ фото → лимит документа с запасом
+const PHOTO_B64_MAX = 800000;      // ~600КБ фото → лимит документа с запасом
+const VIDEO_MAX_BYTES = 15 * 1024 * 1024;  // видео ≤ 15 МБ (чанки ниже)
+const CHUNK_B64_MAX = 850000;      // ~850КБ base64 на документ-чанк
 
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
     fr.onload = () => resolve(String(fr.result).split(',')[1]);
-    fr.onerror = () => reject(new Error('не удалось закодировать фото'));
+    fr.onerror = () => reject(new Error('не удалось закодировать файл'));
     fr.readAsDataURL(blob);
   });
 }
 
-function pickTaskPhoto(task) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.multiple = true;
-  input.addEventListener('change', () => {
-    const files = input.files ? Array.from(input.files) : [];
-    input.remove();
-    if (files.length) submitTaskWithPhoto(task, files);
+function readFileBase64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result).split(',')[1]);
+    fr.onerror = () => reject(new Error('не удалось прочитать файл'));
+    fr.readAsDataURL(file);
   });
-  document.body.appendChild(input);
-  input.click();
+}
+
+function chunkB64(b64, maxLen) {
+  const out = [];
+  for (let i = 0; i < b64.length; i += maxLen) out.push(b64.slice(i, i + maxLen));
+  return out;
+}
+
+/* Открыть системный пикер. Возвращает Promise: резолвится когда пользователь
+   выбрал файлы И отправка завершилась, либо когда отменил пикер (возврат
+   фокуса/вкладки без выбора). Нужно, чтобы кнопка не оставалась «погасшей»
+   (disabled) после сабмита или отмены — раньше это чинилось только перезагрузкой. */
+function pickTaskMedia(task) {
+  return new Promise((resolve) => {
+    const accept = task.withVideo ? (task.withPhoto ? 'image/*,video/*' : 'video/*') : 'image/*';
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.multiple = true;
+    let picked = false;
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener('focus', onBack);
+      document.removeEventListener('visibilitychange', onVis);
+      input.remove();
+      resolve();
+    };
+    const onBack = () => setTimeout(() => { if (!picked) settle(); }, 800);
+    const onVis = () => { if (document.visibilityState === 'visible') onBack(); };
+    input.addEventListener('change', async () => {
+      picked = true;
+      const files = input.files ? Array.from(input.files) : [];
+      if (files.length) await submitTaskMedia(task, files);
+      settle();
+    });
+    window.addEventListener('focus', onBack);
+    document.addEventListener('visibilitychange', onVis);
+    document.body.appendChild(input);
+    input.click();
+  });
 }
 
 function compressImage(file) {
@@ -588,12 +765,18 @@ function compressImage(file) {
   });
 }
 
-async function submitTaskWithPhoto(task, files) {
-  if (DEV_MODE) { showToast('DEV: фото-отправка', false); await doTask(task); return; }
+async function submitTaskMedia(task, files) {
+  if (DEV_MODE) { showToast('DEV: медиа-отправка', false); await doTask(task); return; }
   try {
-    showToast('Готовлю фото…');
-    const photoB64s = [];
+    showToast('Готовлю файлы…');
+    const photos = [];
+    const videos = [];
     for (const file of files) {
+      if (String(file.type || '').indexOf('video/') === 0) videos.push(file);
+      else photos.push(file);
+    }
+    const photoB64s = [];
+    for (const file of photos) {
       const blob = await compressImage(file);
       const photoB64 = await blobToBase64(blob);
       if (photoB64.length > PHOTO_B64_MAX) {
@@ -603,7 +786,23 @@ async function submitTaskWithPhoto(task, files) {
       }
       photoB64s.push(photoB64);
     }
-    if (!photoB64s.length) throw new Error('нет фото');
+    let videoChunkList = [];
+    let videoName = '';
+    let videoType = '';
+    if (videos.length) {
+      const file = videos[0];   // на задание прикрепляется одно видео
+      if (file.size > VIDEO_MAX_BYTES) {
+        showToast('Видео больше 15 МБ. Сними короткий ролик', true);
+        vkFeedback('error');
+        return;
+      }
+      const b64 = await readFileBase64(file);
+      videoChunkList = chunkB64(b64, CHUNK_B64_MAX);
+      videoName = file.name || 'video.mp4';
+      videoType = file.type || 'video/mp4';
+    }
+    if (!photoB64s.length && !videoChunkList.length) throw new Error('нет файлов');
+    const mediaType = videoChunkList.length ? (photoB64s.length ? 'mixed' : 'video') : 'photo';
     const doc = {
       uid: myUid,
       vkId: myVkId,
@@ -611,16 +810,34 @@ async function submitTaskWithPhoto(task, files) {
       taskId: task.id,
       taskText: task.text,
       points: task.points,
+      mediaType: mediaType,
       photoB64s: photoB64s,
       sent: false,
       state: 'pending',
       ts: firebase.firestore.FieldValue.serverTimestamp(),
     };
     if (photoB64s.length === 1) doc.photoB64 = photoB64s[0];
-    await db.collection('submissions').add(doc);
-    showToast('Фото ушло на модерацию!');
+    if (videoChunkList.length) {
+      doc.videoChunks = videoChunkList.length;
+      doc.videoName = videoName;
+      doc.videoType = videoType;
+      if (videoChunkList.length === 1) doc.videoB64 = videoChunkList[0];
+    }
+    const ref = await db.collection('submissions').add(doc);
+    if (videoChunkList.length > 1) {
+      const batch = db.batch();
+      const chunksCol = db.collection('submissions').doc(ref.id).collection('chunks');
+      videoChunkList.forEach((b64, i) => {
+        batch.set(chunksCol.doc(String(i)), { n: i, uid: myUid, vkId: myVkId, b64: b64 });
+      });
+      await batch.commit();
+    }
+    const doneMsg = mediaType === 'video' ? 'Видео ушло на модерацию!'
+      : mediaType === 'mixed' ? 'Фото и видео ушли на модерацию!'
+      : 'Фото ушло на модерацию!';
+    showToast(doneMsg);
   } catch (err) {
-    showToast('Не удалось отправить фото: ' + err.message, true);
+    showToast('Не удалось отправить: ' + err.message, true);
   }
 }
 
@@ -669,6 +886,39 @@ function renderSettings() {
   const s = getSettings();
   document.querySelectorAll('[data-set]').forEach((el) => {
     el.classList.toggle('on', !!s[el.dataset.set]);
+  });
+  renderRatingToggle();
+}
+
+/* Тумблер «Показываться в рейтинге»: виден только организаторам. Ученики всегда
+   в рейтинге — для них строки нет вообще (showInRating всегда true). */
+function renderRatingToggle() {
+  const row = document.getElementById('set-rating-row');
+  if (!row) return;
+  const isOrg = myRole === ROLE_ORGANIZER;
+  row.style.display = isOrg ? 'flex' : 'none';
+  row.classList.toggle('on', isOrg && myShowInRating);
+}
+
+/* Клик по тумблеру рейтинга (организатор): пишем флаг в профиль, а не в локальные
+   настройки — он живёт в БД и виден всем устройствам. */
+function bindRatingToggle() {
+  const row = document.getElementById('set-rating-row');
+  if (!row) return;
+  row.addEventListener('click', async () => {
+    if (myRole !== ROLE_ORGANIZER) return;
+    vkFeedback('click');
+    myShowInRating = !myShowInRating;
+    renderRatingToggle();
+    if (DEV_MODE) return;
+    try {
+      await db.collection('users').doc(myUid).update({
+        showInRating: myShowInRating, score: myScore, vkId: String(myVkId),
+      });
+    } catch (err) {
+      showToast('Не сохранилось: ' + err.message, true);
+      renderRatingToggle();
+    }
   });
 }
 
@@ -753,7 +1003,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (adminBtn) {
     adminBtn.addEventListener('click', () => { location.href = 'admin.html' + location.search; });
   }
+  const districtRow = document.getElementById('set-district-row');
+  if (districtRow) {
+    districtRow.addEventListener('click', () => {
+      vkFeedback('click');
+      showDistrictPicker();
+    });
+  }
   init();
   renderSettings();
   bindSettings();
+  bindRatingToggle();
 });

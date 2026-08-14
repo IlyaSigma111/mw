@@ -36,13 +36,24 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ---------- Фото-заявки ----------
+    // ---------- Фото/видео-заявки ----------
     // Создаёт участник (uid = "vk_<vkId>", как в users/). Читает/правит бот
     // (сервисный аккаунт — правила не применяются) и админ.
+    // Чанки видео лежат в подколлекции submissions/{doc}/chunks: пишет их тот же
+    // участник и только к СВОЕЙ заявке (родитель уже создан и uid совпадает).
     match /submissions/{doc} {
       allow create: if request.auth != null &&
         request.resource.data.uid == 'vk_' + request.resource.data.vkId;
       allow read, update, delete: if isAdmin();
+
+      match /chunks/{chunk} {
+        allow read: if isAdmin();
+        allow create, update: if request.auth != null &&
+          request.resource.data.uid == 'vk_' + request.resource.data.vkId &&
+          exists(/databases/$(database)/documents/submissions/$(doc)) &&
+          get(/databases/$(database)/documents/submissions/$(doc)).data.uid ==
+            'vk_' + request.resource.data.vkId;
+      }
     }
 
     // ---------- Бейджи ----------

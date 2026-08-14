@@ -20,8 +20,11 @@ export function parseDecision(text) {
 }
 
 export function buildCaption(sub) {
+  const label = sub.mediaType === 'video' ? 'Видео'
+    : sub.mediaType === 'mixed' ? 'Фото+видео'
+    : 'Фото';
   const lines = [
-    `Фото с задания №${sub.taskId} · «${sub.taskText || ''}» · +${sub.points ?? '?'} б`,
+    `${label} с задания №${sub.taskId} · «${sub.taskText || ''}» · +${sub.points ?? '?'} б`,
     `Участник: ${sub.name || sub.vkId || sub.uid}`,
     'Ответьте реплаем на это сообщение: «+» засчитать или «−» отклонить',
   ];
@@ -81,6 +84,24 @@ async function uploadPhotosToPeer(token, groupId, peerId, bufs, filenames) {
   return attachments.join(',');
 }
 
+async function uploadVideoToPeer(token, groupId, buf, filename) {
+  const save = await vkApi(token, 'video.save', {
+    group_id: groupId,
+    name: filename || 'video.mp4',
+    is_private: 1,
+    wallpost: 0,
+    no_comments: 1,
+  });
+  const form = new FormData();
+  form.append('video_file', new Blob([buf]), filename || 'video.mp4');
+  const upRes = await fetch(save.upload_url, { method: 'POST', body: form });
+  const text = await upRes.text();
+  let up;
+  try { up = JSON.parse(text); } catch (e) { up = { error: text.slice(0, 200) }; }
+  if (!up || up.error) throw new Error(`upload video failed: ${JSON.stringify(up).slice(0, 300)}`);
+  return `video${save.owner_id}_${up.video_id}_${save.access_key}`;
+}
+
 export function filterPeerList(convs) {
   const peers = [];
   for (const it of (convs || [])) {
@@ -101,24 +122,35 @@ async function discoverPeers(token, configured) {
   return filterPeerList(convs.items || []);
 }
 
-async function sendSubmission(env, db, bucket, snap, peers) {
-  const sub = snap.data();
+/* Собрать видео из base64-чанков (submissions/{id}/chunks, документы ~850КБ
+   base64 каждый — клиент режет так, чтобы не упереться в лимит Firestore 1МБ).
+   Каждый чанк декодируем отдельно и склеиваем байты: это не зависит от
+   выравнивания base64 по 4 символам и переживает пропущенные чанки. */
+export function joinChunks(parts, n) {
   const bufs = [];
-  const filenames = [];
-  if (Array.isArray(sub.photoB64s) && sub.photoB64s.length) {
-    sub.photoB64s.forEach((b64) => bufs.push(Buffer.from(b64, 'base64')));
-  } else if (sub.photoB64) {
-    bufs.push(Buffer.from(sub.photoB64, 'base64'));
-  } else if (sub.photoPath) {
-    [bufs[0]] = await bucket.file(sub.photoPath).download();
-    filenames.push(sub.photoPath.split('/').pop() || 'photo.jpg');
+  for (let i = 0; i < n; i++) {
+    const b64 = parts[i];
+    if (!b64) continue;
+    bufs.push(Buffer.from(b64, 'base64'));
   }
-  if (!bufs.length) {
-    await snap.ref.update({ sent: true, skipped: true, sentAt: FieldValue.serverTimestamp() });
-    console.log(`skip ${snap.id} (no photo)`);
-    return;
+  return bufs.length ? Buffer.concat(bufs) : null;
+}
+
+async function loadVideoBuffer(db, snap, sub) {
+  if (sub.videoB64) return Buffer.from(sub.videoB64, 'base64');
+  if (sub.videoChunks) {
+    const snaps = await db.collection('submissions').doc(snap.id).collection('chunks').orderBy('n').get();
+    const parts = [];
+    snaps.forEach((d) => {
+      const data = d.data() || {};
+      parts[Number(data.n)] = data.b64 || '';
+    });
+    return joinChunks(parts, Number(sub.videoChunks) || parts.length);
   }
-  const attachment = await uploadPhotosToPeer(env.VK_TOKEN, env.VK_GROUP_ID, peers[0], bufs, filenames);
+  return null;
+}
+
+async function sendToPeers(env, db, snap, peers, sub, attachment) {
   const msgIds = {};
   for (const peer of peers) {
     const sent = await vkApi(env.VK_TOKEN, 'messages.send', {
@@ -131,6 +163,41 @@ async function sendSubmission(env, db, bucket, snap, peers) {
     console.log(`sent ${snap.id} -> peer ${peer} msgId=${sent}`);
   }
   await snap.ref.update({ sent: true, msgIds, sentAt: FieldValue.serverTimestamp() });
+}
+
+async function sendSubmission(env, db, bucket, snap, peers) {
+  const sub = snap.data();
+
+  // Видео: чанки в подколлекции → собираем → заливаем в VK как сообщество-видео.
+  if (sub.videoChunks || sub.videoB64) {
+    const vbuf = await loadVideoBuffer(db, snap, sub);
+    if (!vbuf || !vbuf.length) {
+      await snap.ref.update({ sent: true, skipped: true, sentAt: FieldValue.serverTimestamp() });
+      console.log(`skip ${snap.id} (empty video)`);
+      return;
+    }
+    const attachment = await uploadVideoToPeer(env.VK_TOKEN, env.VK_GROUP_ID, vbuf, sub.videoName || 'video.mp4');
+    await sendToPeers(env, db, snap, peers, sub, attachment);
+    return;
+  }
+
+  const bufs = [];
+  const filenames = [];
+  if (Array.isArray(sub.photoB64s) && sub.photoB64s.length) {
+    sub.photoB64s.forEach((b64) => bufs.push(Buffer.from(b64, 'base64')));
+  } else if (sub.photoB64) {
+    bufs.push(Buffer.from(sub.photoB64, 'base64'));
+  } else if (sub.photoPath) {
+    [bufs[0]] = await bucket.file(sub.photoPath).download();
+    filenames.push(sub.photoPath.split('/').pop() || 'photo.jpg');
+  }
+  if (!bufs.length) {
+    await snap.ref.update({ sent: true, skipped: true, sentAt: FieldValue.serverTimestamp() });
+    console.log(`skip ${snap.id} (no media)`);
+    return;
+  }
+  const attachment = await uploadPhotosToPeer(env.VK_TOKEN, env.VK_GROUP_ID, peers[0], bufs, filenames);
+  await sendToPeers(env, db, snap, peers, sub, attachment);
 }
 
 async function scanAndDecide(env, db, submissions, peers) {
@@ -228,7 +295,11 @@ export async function runBot(env) {
 
   const pending = await db.collection('submissions').where('sent', '==', false).limit(5).get();
   for (const snap of pending.docs) {
-    await sendSubmission(env, db, bucket, snap, peers);
+    try {
+      await sendSubmission(env, db, bucket, snap, peers);
+    } catch (e) {
+      console.error(`submission ${snap.id} send failed:`, e.message);
+    }
   }
 
   const undecided = await db.collection('submissions').where('sent', '==', true).where('state', '==', 'pending').limit(20).get();
