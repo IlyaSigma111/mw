@@ -71,6 +71,10 @@ async function init() {
     renderTasks(DEFAULT_TASKS_EMPTY);
     initDock();
 
+    // Админство нужно ЗАРАНЕЕ: пикер округа при первом входе (из subscribeScore)
+    // показывает опцию «Организатор» только админам из config/admins.
+    await maybeShowAdminBtn(vk);
+
     if (DEV_MODE) {
       seedDevData(myUid, vk);
     } else {
@@ -78,7 +82,6 @@ async function init() {
       subscribeTasks(myUid);
       subscribeSchedule();
     }
-    maybeShowAdminBtn(vk);
   } catch (err) {
     console.error(err);
     showToast('Не удалось загрузить приложение: ' + err.message, true);
@@ -209,7 +212,9 @@ function subscribeScore(uid, vk) {
       }
       myScore = d.score || 0;
       document.getElementById('score-num').textContent = myScore;
-      myRole = d.role === ROLE_ORGANIZER ? ROLE_ORGANIZER : ROLE_STUDENT;
+      // Роль организатора имеет смысл только для админов: не-админ с ролью из БД
+      // (например, назначенной до этого фикса) всегда считается учеником.
+      myRole = myIsAdmin && d.role === ROLE_ORGANIZER ? ROLE_ORGANIZER : ROLE_STUDENT;
       myShowInRating = myRole === ROLE_ORGANIZER ? d.showInRating !== false : true;
       ensureDistrict(d);
       renderRatingToggle();
@@ -255,7 +260,7 @@ function ensureDistrict(d) {
   const district = d && d.district && String(d.district).trim();
   if (district) {
     myDistrict = district;
-    myRole = d && d.role === ROLE_ORGANIZER ? ROLE_ORGANIZER : ROLE_STUDENT;
+    myRole = myIsAdmin && d && d.role === ROLE_ORGANIZER ? ROLE_ORGANIZER : ROLE_STUDENT;
     myShowInRating = myRole === ROLE_ORGANIZER
       ? (d ? d.showInRating !== false : myShowInRating)
       : true;
@@ -274,15 +279,18 @@ function showDistrictPicker() {
   const back = document.createElement('div');
   back.className = 'modal-back';
   back.id = 'district-modal';
+  const orgOpt = myIsAdmin
+    ? '<div class="district-opt-sep" aria-hidden="true"></div>' +
+      '<button class="district-opt opt-org" data-d="Организатор" data-org="1" type="button">' +
+      '<span>🎓 Организатор</span><small>не участвует в рейтинге (можно включить в настройках)</small></button>'
+    : '';
   back.innerHTML =
     '<div class="modal">' +
     '<div class="field"><label>Откуда ты приехал?</label>' +
     '<p class="hint" style="margin:0 0 10px">Выбери свой округ — он появится в профиле и в админке.</p></div>' +
     '<div class="district-list">' +
     DISTRICTS.map((d) => '<button class="district-opt" data-d="' + escapeHtml(d) + '" type="button">' + escapeHtml(d) + '</button>').join('') +
-    '<div class="district-opt-sep" aria-hidden="true"></div>' +
-    '<button class="district-opt opt-org" data-d="Организатор" data-org="1" type="button">' +
-    '<span>🎓 Организатор</span><small>не участвует в рейтинге (можно включить в настройках)</small></button>' +
+    orgOpt +
     '</div></div>';
   document.body.appendChild(back);
   back.querySelectorAll('.district-opt').forEach((b) => {
@@ -302,6 +310,12 @@ function closeDistrictPicker() {
 
 async function saveDistrict(name) {
   const isOrg = name === 'Организатор';
+  // Роль «Организатор» доступна только админам (VK ID в config/admins) —
+  // обычные участники не видят опцию и не могут её выставить.
+  if (isOrg && !myIsAdmin) {
+    showToast('Опция доступна только организаторам', true);
+    return;
+  }
   const role = isOrg ? ROLE_ORGANIZER : ROLE_STUDENT;
   const showInRating = !isOrg;   // организатор по умолчанию скрыт из рейтинга
   if (DEV_MODE) {
@@ -890,12 +904,13 @@ function renderSettings() {
   renderRatingToggle();
 }
 
-/* Тумблер «Показываться в рейтинге»: виден только организаторам. Ученики всегда
-   в рейтинге — для них строки нет вообще (showInRating всегда true). */
+/* Тумблер «Показываться в рейтинге»: виден только организаторам (роль доступна
+   исключительно админам из config/admins). Ученики всегда в рейтинге — для них
+   строки нет вообще (showInRating всегда true). */
 function renderRatingToggle() {
   const row = document.getElementById('set-rating-row');
   if (!row) return;
-  const isOrg = myRole === ROLE_ORGANIZER;
+  const isOrg = myIsAdmin && myRole === ROLE_ORGANIZER;
   row.style.display = isOrg ? 'flex' : 'none';
   row.classList.toggle('on', isOrg && myShowInRating);
 }
@@ -906,7 +921,7 @@ function bindRatingToggle() {
   const row = document.getElementById('set-rating-row');
   if (!row) return;
   row.addEventListener('click', async () => {
-    if (myRole !== ROLE_ORGANIZER) return;
+    if (!(myIsAdmin && myRole === ROLE_ORGANIZER)) return;
     vkFeedback('click');
     myShowInRating = !myShowInRating;
     renderRatingToggle();
