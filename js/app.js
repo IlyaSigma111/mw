@@ -212,10 +212,15 @@ function subscribeScore(uid, vk) {
       }
       myScore = d.score || 0;
       document.getElementById('score-num').textContent = myScore;
-      // Роль организатора имеет смысл только для админов: не-админ с ролью из БД
-      // (например, назначенной до этого фикса) всегда считается учеником.
-      myRole = myIsAdmin && d.role === ROLE_ORGANIZER ? ROLE_ORGANIZER : ROLE_STUDENT;
-      myShowInRating = myRole === ROLE_ORGANIZER ? d.showInRating !== false : true;
+      // Роль организатора привязана к админству (VK ID в config/admins):
+      // админ всегда организатор, независимо от того участник он или нет.
+      // Округ такой организатор выбирает сам в настройках (не принудительно при входе).
+      myRole = myIsAdmin ? ROLE_ORGANIZER : ROLE_STUDENT;
+      // Админ с округом — участник от своего округа и виден в рейтинге (пока не выключил);
+      // админ без округа скрыт по умолчанию (тумблер в настройках).
+      myShowInRating = myRole === ROLE_ORGANIZER
+        ? (d.district ? d.showInRating !== false : false)
+        : true;
       ensureDistrict(d);
       renderRatingToggle();
       // Синхронизируем «выполненные задания» с других устройств.
@@ -260,11 +265,17 @@ function ensureDistrict(d) {
   const district = d && d.district && String(d.district).trim();
   if (district) {
     myDistrict = district;
-    myRole = myIsAdmin && d && d.role === ROLE_ORGANIZER ? ROLE_ORGANIZER : ROLE_STUDENT;
+    myRole = myIsAdmin ? ROLE_ORGANIZER : ROLE_STUDENT;
     myShowInRating = myRole === ROLE_ORGANIZER
       ? (d ? d.showInRating !== false : myShowInRating)
       : true;
     try { localStorage.setItem(DISTRICT_KEY, myDistrict); } catch (e) {}
+  } else if (myIsAdmin) {
+    // Организатор без округа: не принуждаем к выбору при входе — он сам выберет
+    // округ в настройках, если хочет участвовать в рейтинге от своего округа.
+    myRole = ROLE_ORGANIZER;
+    myShowInRating = false;
+    try { localStorage.removeItem(DISTRICT_KEY); } catch (e) {}
   } else {
     try { localStorage.setItem(DISTRICT_ASKED_KEY, '1'); } catch (e) {}
     showDistrictPicker();
@@ -316,8 +327,9 @@ async function saveDistrict(name) {
     showToast('Опция доступна только организаторам', true);
     return;
   }
-  const role = isOrg ? ROLE_ORGANIZER : ROLE_STUDENT;
-  const showInRating = !isOrg;   // организатор по умолчанию скрыт из рейтинга
+  // Админ всегда организатор; выбрав округ, он участвует в рейтинге от своего округа.
+  const role = myIsAdmin ? ROLE_ORGANIZER : ROLE_STUDENT;
+  const showInRating = !isOrg;   // «Организатор» скрыт; округ — участник рейтинга
   if (DEV_MODE) {
     myDistrict = name;
     myRole = role;
@@ -338,7 +350,7 @@ async function saveDistrict(name) {
   try {
     // score/vkId передаём явно — правило users требует их в update
     await db.collection('users').doc(myUid).update({
-      district: name, role: role, showInRating: showInRating, score: myScore, vkId: String(vk.id),
+      district: name, role: role, showInRating: showInRating, score: myScore, vkId: String(myVkId),
     });
     showToast('Округ сохранён: ' + name);
   } catch (err) {
@@ -526,6 +538,61 @@ async function loadRatingAll() {
   } finally {
     ratingLoading = false;
   }
+}
+
+/* ---------- Рейтинг округов ----------
+   Сумма баллов по округам (команда = округ). Считается из полного кэша
+   ratingAllCached (30 мин), поэтому отдельно подгружаем его «тихо» при
+   первом открытии вкладки — не разворачивая список участников. */
+function ratingByDistrict(list) {
+  const agg = {};
+  (list || []).forEach((u) => {
+    const d = String(u.district || '').trim();
+    if (!d || d === 'Организатор') return;
+    agg[d] = (agg[d] || 0) + (Number(u.score) || 0);
+  });
+  return Object.keys(agg)
+    .map((name) => ({ district: name, score: agg[name] }))
+    .sort((a, b) => b.score - a.score);
+}
+
+function renderDistrictRating() {
+  const wrap = document.getElementById('district-rating');
+  if (!wrap) return;
+  const all = ratingAllCached();
+  if (!all) {
+    wrap.innerHTML = '<div class="hint">Рейтинг округов загружается…</div>';
+    return;
+  }
+  const rows = ratingByDistrict(all.filter(ratingVisible));
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="hint">По округам пока нет данных</div>';
+    return;
+  }
+  wrap.innerHTML =
+    '<div class="sec-sub" style="margin:18px 0 8px">Рейтинг округов · сумма баллов команды</div>' +
+    rows.map((r, i) =>
+      '<div class="rate-row">' +
+      '<div class="rate-rank">' + (i + 1) + '</div>' +
+      '<div class="rate-name"><span class="rate-name-text">' + escapeHtml(r.district) + '</span></div>' +
+      '<div class="rate-pts">' + r.score + '</div>' +
+      '</div>'
+    ).join('');
+}
+
+/* Тихая загрузка полного кэша рейтинга (для округов), не разворачивает список. */
+function ensureRatingAllQuiet() {
+  if (DEV_MODE || ratingLoading || ratingAllCached()) return;
+  if (!db) return;
+  ratingLoading = true;
+  db.collection('users').orderBy('score', 'desc').get()
+    .then((snap) => {
+      const fresh = snap.docs.map((d) => ({ uid: d.id, ...d.data() })).filter(ratingVisible);
+      try { localStorage.setItem(RATING_ALL_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: fresh })); } catch (e) {}
+      renderDistrictRating();
+    })
+    .catch(() => { /* молчим — округа останутся «загружаются» */ })
+    .finally(() => { ratingLoading = false; });
 }
 
 /* ---------- Задания ---------- */
@@ -863,7 +930,7 @@ function initDock() {
       vkFeedback('click');
       document.querySelectorAll('.dock-item').forEach((b) => b.classList.toggle('on', b === btn));
       document.querySelectorAll('.app-pane').forEach((p) => p.classList.toggle('active', p.dataset.tab === tab));
-      if (tab === 'rating') loadRating();
+      if (tab === 'rating') { loadRating().then(ensureRatingAllQuiet); }
     });
   });
 }
@@ -999,6 +1066,7 @@ function renderRating(listOverride) {
       else loadRatingAll();
     });
   }
+  renderDistrictRating();
 }
 
 /* ---------- Запуск ---------- */

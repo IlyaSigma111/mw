@@ -672,6 +672,64 @@ async function addToAll() {
   }
 }
 
+/* Начислить баллы ВСЕЙ команде округа (например, за общее видео).
+   Округа берём из списка участников + DISTRICTS из Кабинета. */
+function addToDistrict() {
+  const existing = [...new Set(usersCache.map((u) => String(u.district || '').trim()).filter(Boolean).filter((d) => d !== 'Организатор'))];
+  const all = Array.from(new Set([...existing, ...(typeof DISTRICTS !== 'undefined' ? DISTRICTS : [])]));
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.innerHTML =
+    '<div class="modal">' +
+    '<div class="field"><label>Округ (команда)</label>' +
+    '<select id="dd-district" class="input">' +
+    all.map((d) => '<option value="' + escapeHtml(d) + '">' + escapeHtml(d) + '</option>').join('') +
+    '</select></div>' +
+    '<div class="field"><label>Баллы каждому участнику команды</label>' +
+    '<input id="dd-points" class="input" type="number" min="0" value="10" placeholder="Баллы числом"></div>' +
+    '<p class="hint" id="dd-hint" style="margin:6px 0 0">Начисляются всем участникам выбранного округа.</p>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">' +
+    '<button id="dd-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
+    '<button id="dd-ok" class="btn" type="button">Начислить</button>' +
+    '</div></div>';
+  document.body.appendChild(back);
+  const sel = back.querySelector('#dd-district');
+  const inp = back.querySelector('#dd-points');
+  const hint = back.querySelector('#dd-hint');
+  const updateHint = () => {
+    const d = sel.value;
+    const cnt = usersCache.filter((u) => String(u.district || '').trim() === d).length;
+    hint.textContent = cnt ? 'Будет начислено ' + cnt + ' участникам команды «' + d + '».' : 'Пока нет участников с округом «' + d + '» — баллы уйдут после выбора округа в приложении.';
+  };
+  sel.addEventListener('change', updateHint);
+  updateHint();
+  back.querySelector('#dd-cancel').addEventListener('click', () => back.remove());
+  back.querySelector('#dd-ok').addEventListener('click', async () => {
+    const d = sel.value;
+    const pts = Number(inp.value);
+    if (!d) { showToast('Выбери округ', true); return; }
+    if (!isFinite(pts) || pts < 0) { showToast('Введи число баллов', true); return; }
+    const targets = usersCache.filter((u) => String(u.district || '').trim() === d);
+    if (!targets.length) { showToast('Нет участников с округом «' + d + '»', true); return; }
+    const ok = await confirmDialog('Начислить +' + pts + ' баллов ' + targets.length + ' участникам команды «' + d + '»?');
+    if (!ok) return;
+    back.remove();
+    try {
+      const batch = db.batch();
+      targets.forEach((u) => {
+        batch.update(db.collection('users').doc(u.uid), { score: firebase.firestore.FieldValue.increment(pts) });
+      });
+      await batch.commit();
+      await loadUsers();
+      renderStats();
+      showToast('Команде «' + d + '» начислено +' + pts);
+    } catch (err) {
+      showToast('Ошибка: ' + err.message, true);
+    }
+  });
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') back.querySelector('#dd-ok').click(); });
+}
+
 async function resetAllScores() {
   const ok = await confirmDialog('СБРОСИТЬ баллы всех участников в 0? Действие необратимо.');
   if (!ok) return;
@@ -704,6 +762,37 @@ function renderStats() {
   document.getElementById('stat-top3').innerHTML = top3.length
     ? top3.map((u, i) => '<div>' + (i + 1) + '. ' + escapeHtml(u.name || '—') + ' — ' + (u.score || 0) + '</div>').join('')
     : '—';
+  renderDistrictStats();
+}
+
+/* Сумма баллов по округам (команда = округ) для вкладки «Статистика». */
+function districtStats() {
+  const agg = {};
+  usersCache.forEach((u) => {
+    const d = String(u.district || '').trim();
+    if (!d || d === 'Организатор') return;
+    agg[d] = (agg[d] || 0) + (Number(u.score) || 0);
+  });
+  return Object.keys(agg)
+    .map((name) => ({ district: name, score: agg[name] }))
+    .sort((a, b) => b.score - a.score);
+}
+
+function renderDistrictStats() {
+  const wrap = document.getElementById('stat-district');
+  if (!wrap) return;
+  const rows = districtStats();
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="empty">У участников пока нет округов</div>';
+    return;
+  }
+  wrap.innerHTML = rows.map((r, i) =>
+    '<div class="rate-row">' +
+    '<div class="rate-rank">' + (i + 1) + '</div>' +
+    '<div class="rate-name"><span class="rate-name-text">' + escapeHtml(r.district) + '</span></div>' +
+    '<div class="rate-pts">' + r.score + '</div>' +
+    '</div>'
+  ).join('');
 }
 
 /* ============================================================
@@ -745,6 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindTaskFilter();
 
   document.getElementById('btn-add-all').addEventListener('click', addToAll);
+  document.getElementById('btn-add-district').addEventListener('click', addToDistrict);
   document.getElementById('btn-reset-all').addEventListener('click', resetAllScores);
 
   document.getElementById('users-search').addEventListener('input', (e) => {

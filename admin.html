@@ -1,14 +1,14 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#12121A">
-  <title>РњРµРґРёР°РІРѕР»РЅApp вЂ” Р°РґРјРёРЅ</title>
+  <title>МедиаволнApp — админ</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=25">
+  <link rel="stylesheet" href="css/styles.css?v=26">
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -21,100 +21,103 @@
 <body>
   <div id="toasts"></div>
 
-  <!-- Р­РєСЂР°РЅ В«РќРµС‚ РґРѕСЃС‚СѓРїР°В» -->
+  <!-- Экран «Нет доступа» -->
   <div id="gate" class="locked" style="display:none">
     <i data-feather="lock"></i>
-    <h1>РќРµС‚ РґРѕСЃС‚СѓРїР°</h1>
-    <p>Р­С‚Р° СЃС‚СЂР°РЅРёС†Р° РґРѕСЃС‚СѓРїРЅР° С‚РѕР»СЊРєРѕ РѕСЂРіР°РЅРёР·Р°С‚РѕСЂР°Рј СЃР»С‘С‚Р°.</p>
+    <h1>Нет доступа</h1>
+    <p>Эта страница доступна только организаторам слёта.</p>
   </div>
 
-  <!-- РџР°РЅРµР»СЊ Р°РґРјРёРЅР° -->
+  <!-- Панель админа -->
   <div id="panel" class="shell" style="display:none">
     <header class="appbar">
-      <span class="appbar-logo"><i data-feather="activity"></i> РњРµРґРёР°РІРѕР»РЅApp</span>
-      <button id="btn-to-app" class="appbar-admin" style="display:inline-flex" type="button" title="Рљ РїСЂРёР»РѕР¶РµРЅРёСЋ СѓС‡Р°СЃС‚РЅРёРєР°">
+      <span class="appbar-logo"><i data-feather="activity"></i> МедиаволнApp</span>
+      <button id="btn-to-app" class="appbar-admin" style="display:inline-flex" type="button" title="К приложению участника">
         <i data-feather="arrow-left"></i>
       </button>
     </header>
     <header class="hdr rise" style="margin-bottom:20px">
-      <div id="admin-avatar" class="hdr-avatar">Рђ</div>
-      <div class="hdr-name"><span id="admin-name">РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ</span><small><span class="badge badge-admin">Р°РґРјРёРЅ</span></small></div>
+      <div id="admin-avatar" class="hdr-avatar">А</div>
+      <div class="hdr-name"><span id="admin-name">Администратор</span><small><span class="badge badge-admin">админ</span></small></div>
     </header>
 
-    <!-- Р’РєР»Р°РґРєРё -->
+    <!-- Вкладки -->
     <nav class="tabs rise rise-1">
-      <button class="tab-btn" data-tab="schedule" type="button">Р Р°СЃРїРёСЃР°РЅРёРµ</button>
-      <button class="tab-btn" data-tab="tasks" type="button">Р—Р°РґР°РЅРёСЏ</button>
-      <button class="tab-btn" data-tab="users" type="button">РЈС‡Р°СЃС‚РЅРёРєРё</button>
-      <button class="tab-btn" data-tab="stats" type="button">РЎС‚Р°С‚РёСЃС‚РёРєР°</button>
+      <button class="tab-btn" data-tab="schedule" type="button">Расписание</button>
+      <button class="tab-btn" data-tab="tasks" type="button">Задания</button>
+      <button class="tab-btn" data-tab="users" type="button">Участники</button>
+      <button class="tab-btn" data-tab="stats" type="button">Статистика</button>
     </nav>
 
-    <!-- Р РђРЎРџРРЎРђРќРР• -->
+    <!-- РАСПИСАНИЕ -->
     <div class="tab-pane" data-pane="schedule">
       <div id="sched-status" class="sec-sub" style="margin-bottom:14px"></div>
       <div class="field" style="margin-bottom:14px">
-        <label>РџСЂРµСЃРµС‚ РЅР° РґРµРЅСЊ</label>
-        <div class="sec-sub" style="margin:0 0 8px">РџРёС€Рё РґРЅРё РІ РєРѕРЅСЃС‚СЂСѓРєС‚РѕСЂРµ Рё СЃРѕС…СЂР°РЅСЏР№ РєР°Рє РїСЂРµСЃРµС‚. РЈС‚СЂРѕРј РІС‹Р±РµСЂРё, РєР°РєРѕР№ РїСЂРµСЃРµС‚ РІС‹СЃС‚Р°РІРёС‚СЊ РЅР° СЃРµРіРѕРґРЅСЏ вЂ” СѓС‡Р°СЃС‚РЅРёРєРё СѓРІРёРґСЏС‚ РµРіРѕ РїРѕСЃР»Рµ РєРЅРѕРїРєРё В«РћР±РЅРѕРІРёС‚СЊВ» РІ РїСЂРёР»РѕР¶РµРЅРёРё.</div>
-        <button id="btn-new-preset" class="btn btn-block" type="button">+ РќРѕРІС‹Р№ РїСЂРµСЃРµС‚</button>
+        <label>Пресет на день</label>
+        <div class="sec-sub" style="margin:0 0 8px">Пиши дни в конструкторе и сохраняй как пресет. Утром выбери, какой пресет выставить на сегодня — участники увидят его после кнопки «Обновить» в приложении.</div>
+        <button id="btn-new-preset" class="btn btn-block" type="button">+ Новый пресет</button>
       </div>
       <div id="sched-list"></div>
     </div>
 
-    <!-- Р—РђР”РђРќРРЇ -->
+    <!-- ЗАДАНИЯ -->
     <div class="tab-pane" data-pane="tasks" style="display:none">
       <div class="card">
-        <div class="field"><label>Р—Р°РґР°РЅРёСЏ (РѕРґРЅР° СЃС‚СЂРѕРєР° = РѕРґРЅРѕ; Р±Р°Р»Р»С‹ вЂ” РїРѕСЃР»Рµ |)</label>
-          <textarea id="task-text" class="input" rows="3" placeholder="РЎРґРµР»Р°Р№ С„РѕС‚Рѕ Р·Р°РєР°С‚Р°&#10;РќР°Р№РґРё СѓС‡Р°СЃС‚РЅРёРєР° РёР· РґСЂСѓРіРѕРіРѕ РіРѕСЂРѕРґР° | 10&#10;РџСЂРёРґСѓРјР°Р№ РЅР°Р·РІР°РЅРёРµ РєРѕРјР°РЅРґРµ"></textarea>
+        <div class="field"><label>Задания (одна строка = одно; баллы — после |)</label>
+          <textarea id="task-text" class="input" rows="3" placeholder="Сделай фото заката&#10;Найди участника из другого города | 10&#10;Придумай название команде"></textarea>
         </div>
         <div class="row-actions" style="justify-content:flex-start;gap:8px;margin-bottom:12px">
-          <div class="field" style="margin:0;width:100px"><label>Р‘Р°Р»Р»С‹</label><input id="task-points" class="input" type="number" min="1" value="5" placeholder="5"></div>
-          <div class="field" style="margin:0;width:150px"><label>РўРёРї</label>
-            <select id="task-type" class="input"><option value="once">РћР±С‹С‡РЅРѕРµ</option><option value="repeat">РџРѕРІС‚РѕСЂСЏРµРјРѕРµ</option></select>
+          <div class="field" style="margin:0;width:100px"><label>Баллы</label><input id="task-points" class="input" type="number" min="1" value="5" placeholder="5"></div>
+          <div class="field" style="margin:0;width:150px"><label>Тип</label>
+            <select id="task-type" class="input"><option value="once">Обычное</option><option value="repeat">Повторяемое</option></select>
           </div>
-          <div class="field" id="task-limit-wrap" style="margin:0;width:110px;display:none"><label>Р›РёРјРёС‚ СЂР°Р·</label><input id="task-limit" class="input" type="number" min="1" value="3" placeholder="3"></div>
+          <div class="field" id="task-limit-wrap" style="margin:0;width:110px;display:none"><label>Лимит раз</label><input id="task-limit" class="input" type="number" min="1" value="3" placeholder="3"></div>
         </div>
-        <div class="field"><label>Р”РµРЅСЊ РґРµР№СЃС‚РІРёСЏ (РїСѓСЃС‚Рѕ = РІСЃРµРіРґР°)</label>
-          <input id="task-day" class="input" placeholder="Р›СЋР±РѕР№ РґРµРЅСЊ В· Р”РµРЅСЊ 1 В· 2026-08-15"></div>
-        <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="task-photo"> РўСЂРµР±РѕРІР°С‚СЊ С„РѕС‚Рѕ РѕС‚ СѓС‡Р°СЃС‚РЅРёРєР° (РєРЅРѕРїРєР° рџ“·)</label>
-        <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="task-video"> РўСЂРµР±РѕРІР°С‚СЊ РІРёРґРµРѕ РѕС‚ СѓС‡Р°СЃС‚РЅРёРєР° (РєРЅРѕРїРєР° рџЋҐ)</label>
-        <button id="btn-add-task" class="btn btn-block" type="button">РЎРѕР·РґР°С‚СЊ Р·Р°РґР°РЅРёРµ(СЏ)</button>
+        <div class="field"><label>День действия (пусто = всегда)</label>
+          <input id="task-day" class="input" placeholder="Любой день · День 1 · 2026-08-15"></div>
+        <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="task-photo"> Требовать фото от участника (кнопка 📷)</label>
+        <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="task-video"> Требовать видео от участника (кнопка 🎥)</label>
+        <button id="btn-add-task" class="btn btn-block" type="button">Создать задание(я)</button>
       </div>
       <div class="row-actions" style="margin:14px 0">
-        <button class="btn btn-ghost btn-sm" data-filter="all" type="button">Р’СЃРµ</button>
-        <button class="btn btn-ghost btn-sm" data-filter="active" type="button">РђРєС‚РёРІРЅС‹Рµ</button>
-        <button class="btn btn-ghost btn-sm" data-filter="inactive" type="button">Р’С‹РєР»СЋС‡РµРЅРЅС‹Рµ</button>
+        <button class="btn btn-ghost btn-sm" data-filter="all" type="button">Все</button>
+        <button class="btn btn-ghost btn-sm" data-filter="active" type="button">Активные</button>
+        <button class="btn btn-ghost btn-sm" data-filter="inactive" type="button">Выключенные</button>
       </div>
       <div id="tasks-list"></div>
     </div>
 
-    <!-- РЈР§РђРЎРўРќРРљР -->
+    <!-- УЧАСТНИКИ -->
     <div class="tab-pane" data-pane="users" style="display:none">
       <div class="field">
-        <label>РџРѕРёСЃРє</label>
-        <input id="users-search" class="input" placeholder="РРјСЏ РёР»Рё VK ID">
+        <label>Поиск</label>
+        <input id="users-search" class="input" placeholder="Имя или VK ID">
       </div>
       <div class="row-actions" style="margin-bottom:12px">
-        <button id="btn-add-all" class="btn btn-warn btn-sm" type="button">+5 РІСЃРµРј</button>
-        <button id="btn-reset-all" class="btn btn-danger btn-sm" type="button">РЎР±СЂРѕСЃРёС‚СЊ РІСЃРµ Р±Р°Р»Р»С‹</button>
+        <button id="btn-add-all" class="btn btn-warn btn-sm" type="button">+5 всем</button>
+        <button id="btn-add-district" class="btn btn-sm" type="button">🎥 Баллы команде округа</button>
+        <button id="btn-reset-all" class="btn btn-danger btn-sm" type="button">Сбросить все баллы</button>
       </div>
       <div id="users-list"></div>
     </div>
 
-    <!-- РЎРўРђРўРРЎРўРРљРђ -->
+    <!-- СТАТИСТИКА -->
     <div class="tab-pane" data-pane="stats" style="display:none">
       <div class="stat-grid">
-        <div class="stat"><b id="stat-users">0</b><span>РЈС‡Р°СЃС‚РЅРёРєРѕРІ</span></div>
-        <div class="stat"><b id="stat-sum">0</b><span>РЎСѓРјРјР° Р±Р°Р»Р»РѕРІ</span></div>
-        <div class="stat"><b id="stat-tasks">0</b><span>РђРєС‚РёРІРЅС‹С… Р·Р°РґР°РЅРёР№</span></div>
-        <div class="stat"><b id="stat-top3" style="font-size:16px">вЂ”</b><span>РўРѕРї-3</span></div>
+        <div class="stat"><b id="stat-users">0</b><span>Участников</span></div>
+        <div class="stat"><b id="stat-sum">0</b><span>Сумма баллов</span></div>
+        <div class="stat"><b id="stat-tasks">0</b><span>Активных заданий</span></div>
+        <div class="stat"><b id="stat-top3" style="font-size:16px">—</b><span>Топ-3</span></div>
       </div>
+      <div class="sec-sub" style="margin:18px 0 8px">Рейтинг округов · сумма баллов</div>
+      <div id="stat-district"></div>
     </div>
   </div>
 
-  <script src="js/firebase-config.js?v=25"></script>
-  <script src="js/districts.js?v=25"></script>
-  <script src="js/schedule.js?v=25"></script>
-  <script src="js/vk.js?v=25"></script>
-  <script src="js/admin.js?v=25"></script>
+  <script src="js/firebase-config.js?v=26"></script>
+  <script src="js/districts.js?v=26"></script>
+  <script src="js/schedule.js?v=26"></script>
+  <script src="js/vk.js?v=26"></script>
+  <script src="js/admin.js?v=26"></script>
 </body>
 </html>
