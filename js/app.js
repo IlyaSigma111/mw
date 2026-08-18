@@ -612,8 +612,8 @@ function renderDistrictRating() {
 }
 
 /* Тихая загрузка полного кэша рейтинга (для округов), не разворачивает список. */
-function ensureRatingAllQuiet() {
-  if (DEV_MODE || ratingLoading || ratingAllCached()) return;
+function ensureRatingAllQuiet(force) {
+  if (DEV_MODE || ratingLoading || (!force && ratingAllCached())) return;
   if (!db) return;
   ratingLoading = true;
   db.collection('users').orderBy('score', 'desc').get()
@@ -1110,7 +1110,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (ratingRefresh) {
     ratingRefresh.addEventListener('click', () => {
       vkFeedback('click');
-      loadRating();
+      localStorage.removeItem('mw_rating_all'); loadRating().then(() => ensureRatingAllQuiet(true));
     });
   }
   const adminBtn = document.getElementById('btn-admin-open');
