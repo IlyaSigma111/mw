@@ -1,4 +1,6 @@
-/* ============================================================
+import re
+
+css = '''/* ============================================================
    МедиаволнApp — NEON GLASS (High Contrast & Vibrant)
    Основа: Глубокий темный фон, яркие неоновые акценты и градиенты.
    ============================================================ */
@@ -270,3 +272,11 @@ body {
 .modal { background: var(--surface-2); border-top: 1px solid rgba(255,255,255,0.1); width: 100%; border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 32px 24px 48px; max-height: 85vh; overflow-y: auto; box-shadow: 0 -10px 40px rgba(0,0,0,0.8); }
 
 .empty { text-align: center; color: var(--text-dim); padding: 32px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 13px; }
+'''
+
+open('css/styles.css', 'w', encoding='utf-8').write(css)
+
+import re
+html = open('index.html', encoding='utf-8').read()
+html = html.replace('v=36', 'v=37')
+open('index.html', 'w', encoding='utf-8').write(html)
