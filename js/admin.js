@@ -115,6 +115,7 @@ function switchTab(name) {
     b.classList.toggle('on', b.dataset.tab === name));
   document.querySelectorAll('.tab-pane').forEach((p) =>
     p.style.display = p.dataset.pane === name ? 'block' : 'none');
+  if (name === 'stats') { loadUsers().then(renderStats); }
 }
 
 /* ============================================================

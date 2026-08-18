@@ -16,7 +16,7 @@ service cloud.firestore {
     // причём баллы нельзя уменьшать самому (уменьшает только админ).
     // Чужие документы, удаление, корректировка баллов — только админ.
     match /users/{userId} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow create, update, delete: if isAdmin();
       allow create: if request.auth != null && userId == 'vk_' + request.resource.data.vkId;
       allow update: if request.auth != null &&
