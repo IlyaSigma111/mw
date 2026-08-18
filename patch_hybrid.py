@@ -1,4 +1,6 @@
-/* ============================================================
+import re
+
+css = '''/* ============================================================
    МедиаволнApp — MATERIAL YOU + iOS HYBRID
    Стеклянный морфизм (iOS) + Тоновые плашки и скругления (Material You)
    ============================================================ */
@@ -266,3 +268,11 @@ body {
 .modal { background: var(--surface); border-top: 1px solid var(--outline-variant); width: 100%; border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 32px 24px 48px; max-height: 85vh; overflow-y: auto; }
 
 .empty { text-align: center; color: var(--text-dim); padding: 32px; font-weight: 500; }
+'''
+
+open('css/styles.css', 'w', encoding='utf-8').write(css)
+
+import re
+html = open('index.html', encoding='utf-8').read()
+html = html.replace('v=34', 'v=35')
+open('index.html', 'w', encoding='utf-8').write(html)
