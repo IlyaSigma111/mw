@@ -31,4 +31,4 @@ const FIREBASE_CONFIG = location.hostname.includes('test-26') ? TEST_CONFIG : PR
 const DEV_MODE = false;
 
 /* ID мини-приложения ВКонтакте (для VK.init) */
-const VK_APP_ID = 54716297;
+const VK_APP_ID = location.hostname.includes('test-26') ? 54725787 : 54716297;
