@@ -165,17 +165,17 @@ body {
 .switch, .sw { position: relative; width: 50px; height: 30px; flex-shrink: 0; background: var(--surface-3); border-radius: var(--radius-full); transition: 0.3s; border: none; }
 .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
 .slider { position: absolute; inset: 0; cursor: pointer; border-radius: var(--radius-full); }
-.switch input:checked + .slider, .sw.on { background: var(--primary); }
+.switch input:checked + .slider, .set-row.on .sw { background: var(--primary); }
 .slider::before, .sw i {
   content: ""; position: absolute; left: 2px; top: 2px; width: 26px; height: 26px;
   background: #fff; border-radius: 50%; transition: 0.3s var(--ease); box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
-.switch input:checked + .slider::before, .sw.on i {
+.switch input:checked + .slider::before, .set-row.on .sw i {
   transform: translateX(20px);
 }
 
 /* Settings Rows */
-.set-row { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 0.5px solid var(--outline-variant); }
+.set-row { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-bottom: 0.5px solid var(--outline-variant); cursor: pointer; }
 .set-row:last-child { border-bottom: none; }
 .set-row .grow { flex: 1; }
 .set-row .grow b { font-size: 16px; font-weight: 500; }
