@@ -155,8 +155,8 @@ body {
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   background: var(--primary); color: var(--on-primary);
-  border: none; border-radius: var(--radius-full);
-  padding: 16px 24px; font-size: 16px; font-weight: 600; font-family: inherit;
+  border: none; border-radius: 14px;
+  padding: 14px 20px; font-size: 16px; font-weight: 600; font-family: inherit;
   cursor: pointer; transition: all 0.2s;
   box-shadow: 0 4px 14px rgba(145, 199, 237, 0.3);
 }
@@ -205,7 +205,7 @@ body {
 .task-text { font-size: 16px; flex: 1; line-height: 1.4; font-weight: 500; }
 .task.done { opacity: 0.5; filter: grayscale(1); }
 .task.done .task-text { text-decoration: line-through; }
-.btn-photo { background: var(--surface-3); border: 1px solid var(--outline-variant); padding: 10px; border-radius: 50%; color: var(--primary); transition: 0.2s; }
+.btn-photo { background: var(--surface-3); border: 1px solid var(--outline-variant); padding: 10px; border-radius: 12px; color: var(--primary); transition: 0.2s; }
 .btn-photo:active { transform: scale(0.9); }
 
 /* Forms */
