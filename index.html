@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#12121A">
-  <title>РњРµРґРёР°РІРѕР»РЅApp</title>
+  <meta name="theme-color" content="#05060E">
+  <title>МедиаволнApp</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=26">
+  <link rel="stylesheet" href="css/styles.css?v=27">
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -27,110 +27,126 @@
   <div id="toasts"></div>
 
   <div class="shell">
-    <!-- Р’РµСЂС…РЅСЏСЏ РїР°РЅРµР»СЊ вЂ” РЅР° СѓСЂРѕРІРЅРµ С€Р°РїРєРё VK (РєСЂРµСЃС‚РёРє / в‹Ї СЃРїСЂР°РІР° РІРІРµСЂС…Сѓ) -->
     <header class="appbar">
-      <span class="appbar-logo"><i data-feather="activity"></i> РњРµРґРёР°РІРѕР»РЅApp</span>
+      <div class="appbar-logo">
+        <div class="logo-icon"><i data-feather="radio"></i></div>
+        МЕДИАВОЛНА
+      </div>
     </header>
 
-    <!-- РЁР°РїРєР° СѓС‡Р°СЃС‚РЅРёРєР°: Р°РІР°С‚Р°СЂ, РёРјСЏ, Р±Р°Р»Р»С‹ -->
-    <header class="hdr rise">
-      <div id="hdr-avatar" class="hdr-avatar"></div>
-      <div id="hdr-name" class="hdr-name"><span>вЂ¦</span></div>
-      <div class="hdr-score"><span id="score-num">0</span></div>
+    <!-- NEW HERO HEADER -->
+    <header class="hero rise">
+      <div class="hero-bg-glow"></div>
+      <div class="hero-content">
+        <div id="hdr-avatar" class="hero-avatar"></div>
+        <div id="hdr-name" class="hero-name"><span>…</span></div>
+        <div class="hero-score-wrap">
+          <div class="hero-score">
+            <i data-feather="zap"></i> <span id="score-num">0</span>
+          </div>
+        </div>
+      </div>
     </header>
 
-    <!-- Р РђРЎРџРРЎРђРќРР• (РѕС‚РєСЂС‹С‚Рѕ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ) -->
+    <!-- РАСПИСАНИЕ -->
     <section class="sec tab-pane app-pane rise rise-1 active" data-tab="schedule">
       <div class="sec-head">
-        <i data-feather="calendar"></i>
-        <h2>Р Р°СЃРїРёСЃР°РЅРёРµ</h2>
-        <button id="sched-refresh" class="link-btn" type="button" style="margin-left:auto" title="РћР±РЅРѕРІРёС‚СЊ РёР· Р°РґРјРёРЅРєРё">РћР±РЅРѕРІРёС‚СЊ</button>
+        <div>
+          <h2>Расписание</h2>
+          <div class="sec-sub">События на сегодня</div>
+        </div>
+        <button id="sched-refresh" class="btn-icon" type="button" title="Обновить"><i data-feather="refresh-cw"></i></button>
       </div>
-      <div id="schedule">
+      <div id="schedule" class="grid-layout">
         <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
       </div>
     </section>
 
-    <!-- Р—РђР”РђРќРРЇ -->
+    <!-- ЗАДАНИЯ -->
     <section class="sec tab-pane app-pane rise rise-2" data-tab="tasks">
       <div class="sec-head">
-        <i data-feather="zap"></i>
-        <h2>Р—Р°РґР°РЅРёСЏ</h2>
+        <div>
+          <h2>Активности</h2>
+          <div class="sec-sub">Выполняй задания и копи баллы</div>
+        </div>
       </div>
-      <div class="sec-sub">Р’С‹РїРѕР»РЅСЏР№ Рё РїРѕР»СѓС‡Р°Р№ Р±Р°Р»Р»С‹</div>
-      <div id="tasks"></div>
+      <div id="tasks" class="grid-layout"></div>
     </section>
 
-    <!-- Р Р•Р™РўРРќР“ -->
+    <!-- РЕЙТИНГ -->
     <section class="sec tab-pane app-pane rise rise-3" data-tab="rating">
       <div class="sec-head">
-        <i data-feather="award"></i>
-        <h2>Р РµР№С‚РёРЅРі</h2>
-        <button id="rating-refresh" class="link-btn" type="button" style="margin-left:auto" title="РћР±РЅРѕРІРёС‚СЊ СЂРµР№С‚РёРЅРі">РћР±РЅРѕРІРёС‚СЊ</button>
+        <div>
+          <h2>Лидерборд</h2>
+          <div class="sec-sub">Топ участников слёта</div>
+        </div>
+        <button id="rating-refresh" class="btn-icon" type="button" title="Обновить"><i data-feather="refresh-cw"></i></button>
       </div>
-      <div class="sec-sub">РўРѕРї-10 В· РѕР±РЅРѕРІР»СЏРµС‚СЃСЏ РїРѕ РєРЅРѕРїРєРµ</div>
-      <div id="rating">
+      <div id="rating" class="rating-list">
         <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
       </div>
-      <div id="district-rating"></div>
+      <div id="district-rating" class="rating-list"></div>
     </section>
 
-    <!-- РќРђРЎРўР РћР™РљР (Р»РѕРєР°Р»СЊРЅРѕ, Р±РµР· Р‘Р”) -->
+    <!-- НАСТРОЙКИ -->
     <section class="sec tab-pane app-pane rise rise-4" data-tab="settings">
       <div class="sec-head">
-        <i data-feather="settings"></i>
-        <h2>РќР°СЃС‚СЂРѕР№РєРё</h2>
+        <div>
+          <h2>Профиль</h2>
+          <div class="sec-sub">Управление аккаунтом</div>
+        </div>
       </div>
-      <div class="sec-sub">РҐСЂР°РЅСЏС‚СЃСЏ РЅР° СѓСЃС‚СЂРѕР№СЃС‚РІРµ В· РІРёР±СЂР°С†РёСЏ СЂР°Р±РѕС‚Р°РµС‚ РІ РїСЂРёР»РѕР¶РµРЅРёРё Р’Рљ РЅР° С‚РµР»РµС„РѕРЅРµ</div>
-      <div class="card">
+      <div class="card glass-card">
         <div class="set-row" data-set="vibe" role="button" tabindex="0">
-          <div class="grow"><b>Р’РёР±СЂР°С†РёСЏ</b><small>С‚Р°РєС‚РёР»СЊРЅС‹Р№ РѕС‚РєР»РёРє РЅР° РґРµР№СЃС‚РІРёСЏ</small></div>
+          <div class="grow"><b>Вибрация</b><small>Тактильный отклик</small></div>
           <div class="sw"><i></i></div>
         </div>
         <div class="set-row" data-set="sound" role="button" tabindex="0">
-          <div class="grow"><b>Р—РІСѓРє</b><small>РєРѕСЂРѕС‚РєРёРµ СЃРёРіРЅР°Р»С‹ РЅР° СЃРѕР±С‹С‚РёСЏ</small></div>
+          <div class="grow"><b>Звуки</b><small>Сигналы на действия</small></div>
           <div class="sw"><i></i></div>
         </div>
         <div class="set-row" id="set-district-row" role="button" tabindex="0">
-          <div class="grow"><b>РћРєСЂСѓРі</b><small id="set-district-val">РЅРµ РІС‹Р±СЂР°РЅ</small></div>
-          <i data-feather="map-pin"></i>
+          <div class="grow"><b>Мой округ</b><small id="set-district-val" class="highlight-text">не выбран</small></div>
+          <div class="action-icon"><i data-feather="chevron-right"></i></div>
         </div>
         <div class="set-row" id="set-rating-row" style="display:none" role="button" tabindex="0">
-          <div class="grow"><b>РџРѕРєР°Р·С‹РІР°С‚СЊСЃСЏ РІ СЂРµР№С‚РёРЅРіРµ</b><small>РѕСЂРіР°РЅРёР·Р°С‚РѕСЂ СЃРєСЂС‹С‚ РёР· С‚Р°Р±Р»РёС†С‹ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ</small></div>
+          <div class="grow"><b>Показ в рейтинге</b><small>Открытый профиль</small></div>
           <div class="sw"><i></i></div>
         </div>
       </div>
-      <div class="card" id="admin-entry" style="display:none">
-        <button id="btn-admin-open" class="btn btn-ghost btn-block" type="button">
-          <i data-feather="sliders"></i> РџР°РЅРµР»СЊ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°
+      <div class="card glass-card" id="admin-entry" style="display:none; margin-top: 16px;">
+        <button id="btn-admin-open" class="btn btn-block btn-admin" type="button">
+          <i data-feather="shield"></i> Панель администратора
         </button>
       </div>
     </section>
   </div>
 
-  <!-- Р”РѕРєР±Р°СЂ: Р Р°СЃРїРёСЃР°РЅРёРµ В· Р—Р°РґР°РЅРёСЏ В· Р РµР№С‚РёРЅРі В· РќР°СЃС‚СЂРѕР№РєРё -->
   <nav class="dock">
     <button class="dock-item on" data-tab="schedule" type="button">
-      <i data-feather="calendar"></i><span>Р Р°СЃРїРёСЃР°РЅРёРµ</span>
+      <div class="dock-icon"><i data-feather="calendar"></i></div>
+      <span>План</span>
     </button>
     <button class="dock-item" data-tab="tasks" type="button">
-      <i data-feather="zap"></i><span>Р—Р°РґР°РЅРёСЏ</span>
+      <div class="dock-icon"><i data-feather="zap"></i></div>
+      <span>Задания</span>
     </button>
     <button class="dock-item" data-tab="rating" type="button">
-      <i data-feather="award"></i><span>Р РµР№С‚РёРЅРі</span>
+      <div class="dock-icon"><i data-feather="award"></i></div>
+      <span>Топ</span>
     </button>
     <button class="dock-item" data-tab="settings" type="button">
-      <i data-feather="settings"></i><span>РќР°СЃС‚СЂРѕР№РєРё</span>
+      <div class="dock-icon"><i data-feather="user"></i></div>
+      <span>Профиль</span>
     </button>
   </nav>
 
-  <script src="js/firebase-config.js?v=26"></script>
-  <script src="js/districts.js?v=26"></script>
-  <script src="js/schedule.js?v=26"></script>
-  <script src="js/vk.js?v=26"></script>
-  <script src="js/app.js?v=26"></script>
+  <script src="js/firebase-config.js?v=27"></script>
+  <script src="js/districts.js?v=27"></script>
+  <script src="js/schedule.js?v=27"></script>
+  <script src="js/vk.js?v=27"></script>
+  <script src="js/app.js?v=27"></script>
   <script>
-    /* Р’С…РѕРґ РІ Р°РґРјРёРЅРєСѓ РїРѕ deep-link: ...vk.com/app54716297#admin */
     (function () {
       var hash = location.hash || '';
       var deeplink = '';
@@ -142,4 +158,3 @@
   </script>
 </body>
 </html>
-
