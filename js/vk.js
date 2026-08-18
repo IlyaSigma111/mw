@@ -36,7 +36,7 @@ const BRIDGE = (IS_VK && typeof vkBridge !== 'undefined' && vkBridge) ? vkBridge
 /* Заглушка для офлайн-тестирования / вне ВК */
 function vkStubUser() {
   return {
-    id: 12345,
+    id: 610622680,
     first_name: 'Тестовый',
     last_name: 'Пользователь',
     photo_100: '',
