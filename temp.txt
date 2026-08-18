@@ -1,0 +1,47 @@
+280 to 295:
+    showDistrictPicker();
+  }
+  updateHeaderSub();
+  renderDistrictVal();
+}
+
+function showDistrictPicker() {
+  if (districtPickerOpen || !(typeof DISTRICTS !== 'undefined' && DISTRICTS.length)) return;
+  districtPickerOpen = true;
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.id = 'district-modal';
+  const orgOpt = myIsAdmin
+    ? '<div class="district-opt-sep" aria-hidden="true"></div>' +
+      '<button class="district-opt opt-org" data-d="Организатор" data-org="1" type="button">' +
+      '<span>🎓 Организатор</span><small>не участвует в рейтинге (можно включить в настройках)</small></button>'
+
+286 to 301:
+function showDistrictPicker() {
+  if (districtPickerOpen || !(typeof DISTRICTS !== 'undefined' && DISTRICTS.length)) return;
+  districtPickerOpen = true;
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.id = 'district-modal';
+  const orgOpt = myIsAdmin
+    ? '<div class="district-opt-sep" aria-hidden="true"></div>' +
+      '<button class="district-opt opt-org" data-d="Организатор" data-org="1" type="button">' +
+      '<span>🎓 Организатор</span><small>не участвует в рейтинге (можно включить в настройках)</small></button>'
+    : '';
+  back.innerHTML =
+    '<div class="modal">' +
+    '<div class="field"><label>Откуда ты приехал?</label>' +
+    '<p class="hint" style="margin:0 0 10px">Выбери свой округ — он появится в профиле и в админке.</p></div>' +
+    '<div class="district-list">' +
+
+1123 to 1138:
+      showDistrictPicker();
+    });
+  }
+  init();
+  renderSettings();
+  bindSettings();
+  bindRatingToggle();
+});
+
+
