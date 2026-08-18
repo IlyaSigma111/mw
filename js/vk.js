@@ -70,13 +70,7 @@ async function vkGetUser() {
     return vkFromLaunchParams() || vkStubUser();
   }
 
-  // Инициализация моста (в новых версиях отправляется автоматически)
-  try {
-    await withTimeout(BRIDGE.send('VKWebAppInit'), 1500);
-  } catch (err) {
-    console.warn('VKWebAppInit failed:', err);
-  }
-
+  // Инициализация моста теперь вызывается при загрузке скрипта
   try {
     const res = await withTimeout(BRIDGE.send('VKWebAppGetUserInfo'), 3000);
     if (res && res.id) {
