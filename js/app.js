@@ -1069,12 +1069,13 @@ function renderRating(listOverride) {
   const rows = list.map((u, i) => {
     const rankCls = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
     const me = myVkId && String(u.vkId) === myVkId ? ' rate-me' : '';
+    const adminCls = u.role === 'organizer' ? ' rate-admin-glow' : '';
     const avatarInner = u.avatar
       ? '<img class="rate-avatar" src="' + escapeHtml(u.avatar) + '" alt="">'
       : '<div class="rate-avatar">' + escapeHtml((u.name || '?')[0]) + '</div>';
     const avatar = '<a href="https://vk.com/id' + u.vkId + '" target="_blank" style="text-decoration:none;display:flex">' + avatarInner + '</a>';
     return (
-      '<div class="rate-row' + me + '">' +
+      '<div class="rate-row' + me + adminCls + '">' +
       '<div class="rate-rank ' + rankCls + '">' + (i + 1) + '</div>' +
       avatar +
       '<div class="rate-name">' +

@@ -310,3 +310,23 @@ body {
 }
 .district-opt.opt-org span { color: var(--primary); font-weight: 600; }
 .district-opt.opt-org small { font-weight: 500; color: var(--text-main); font-size: 13px; opacity: 0.8; }
+
+/* Animated Admin Glow (Gemini Style) */
+@keyframes gemini-glow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.rate-admin-glow {
+  background: linear-gradient(115deg, rgba(32,45,100,0.7), rgba(80,35,110,0.7), rgba(30,70,95,0.7));
+  background-size: 250% 250%;
+  animation: gemini-glow 5s ease infinite;
+  border: 1px solid rgba(150, 120, 255, 0.3) !important;
+  box-shadow: 0 4px 16px rgba(150, 120, 255, 0.2);
+}
+.rate-admin-glow .rate-name-text {
+  background: linear-gradient(90deg, #a594ff, #ff94d8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+}
