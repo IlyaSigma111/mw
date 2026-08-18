@@ -36,11 +36,12 @@ const BRIDGE = (IS_VK && typeof vkBridge !== 'undefined' && vkBridge) ? vkBridge
 /* Заглушка для офлайн-тестирования / вне ВК */
 function vkStubUser() {
   return {
-    id: 610622680,
-    first_name: 'Тестовый',
-    last_name: 'Пользователь',
+    id: 12345,
+    first_name: 'Гость',
+    last_name: 'Сайта',
     photo_100: '',
   };
+};
 }
 
 /* Пользователь из launch-параметров (vk_user_id в URL), если есть */
@@ -48,7 +49,7 @@ function vkFromLaunchParams() {
   try {
     const urlId = Number(getLaunchParams().get('vk_user_id'));
     if (urlId && !DEV_MODE) {
-      return { id: urlId, first_name: 'Участник', last_name: '', photo_100: '' };
+      return { id: urlId, first_name: 'Пользователь', last_name: 'ВК', photo_100: '' };
     }
   } catch (err) { /* ignore */ }
   return null;
