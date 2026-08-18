@@ -41,7 +41,6 @@ function vkStubUser() {
     last_name: 'Сайта',
     photo_100: '',
   };
-};
 }
 
 /* Пользователь из launch-параметров (vk_user_id в URL), если есть */
