@@ -76,6 +76,18 @@ body {
   color: var(--text-main); letter-spacing: -0.5px;
 }
 .appbar-logo .feather { color: var(--primary); width: 22px; height: 22px; }
+.appbar-admin {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.appbar-admin:active { background: rgba(255, 255, 255, 0.2); }
+
 
 /* Header Profile */
 .hdr {
