@@ -2,150 +2,154 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#05060E">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
   <title>МедиаволнApp</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=28">
-  <!-- Firebase SDK (compat) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=29">
+  
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-  <!-- VK Bridge -->
   <script src="js/vk-bridge.js"></script>
   <script>
     if (typeof vkBridge !== 'undefined') {
       vkBridge.send('VKWebAppInit').catch(function() {});
     }
   </script>
-  <!-- Feather Icons -->
   <script src="https://unpkg.com/feather-icons"></script>
 </head>
 <body>
   <div id="toasts"></div>
 
-  <div class="shell">
-    <header class="appbar">
-      <div class="appbar-logo">
-        <div class="logo-icon"><i data-feather="radio"></i></div>
-        МЕДИАВОЛНА
+  <div class="mobile-wrapper">
+    <!-- Инновационный плавающий заголовок (Sticky Header) -->
+    <header class="top-nav">
+      <div class="user-pill rise">
+        <div id="hdr-avatar" class="pill-avatar"></div>
+        <div class="pill-info">
+          <div id="hdr-name" class="pill-name">Загрузка...</div>
+          <div class="pill-role">Участник слёта</div>
+        </div>
+        <div class="pill-score">
+          <span id="score-num">0</span> <i data-feather="zap"></i>
+        </div>
       </div>
     </header>
 
-    <!-- NEW HERO HEADER -->
-    <header class="hero rise">
-      <div class="hero-bg-glow"></div>
-      <div class="hero-content">
-        <div id="hdr-avatar" class="hero-avatar"></div>
-        <div id="hdr-name" class="hero-name"><span>…</span></div>
-        <div class="hero-score-wrap">
-          <div class="hero-score">
-            <i data-feather="zap"></i> <span id="score-num">0</span>
+    <main class="main-content">
+      <!-- РАСПИСАНИЕ -->
+      <section class="app-pane active" data-tab="schedule">
+        <div class="page-header rise">
+          <div class="page-header-text">
+            <h1 class="gradient-text">Расписание</h1>
+            <p>Ваши события на сегодня</p>
+          </div>
+          <button id="sched-refresh" class="action-btn" type="button"><i data-feather="refresh-cw"></i></button>
+        </div>
+        <div id="schedule" class="bento-grid rise rise-1">
+          <!-- Скелетоны -->
+          <div class="skel h18"></div><div class="skel h18"></div>
+        </div>
+      </section>
+
+      <!-- ЗАДАНИЯ -->
+      <section class="app-pane" data-tab="tasks">
+        <div class="page-header rise">
+          <div class="page-header-text">
+            <h1 class="gradient-text">Активности</h1>
+            <p>Выполняйте задания и получайте баллы</p>
           </div>
         </div>
-      </div>
-    </header>
+        <div id="tasks" class="task-list rise rise-1"></div>
+      </section>
 
-    <!-- РАСПИСАНИЕ -->
-    <section class="sec tab-pane app-pane rise rise-1 active" data-tab="schedule">
-      <div class="sec-head">
-        <div>
-          <h2>Расписание</h2>
-          <div class="sec-sub">События на сегодня</div>
+      <!-- РЕЙТИНГ -->
+      <section class="app-pane" data-tab="rating">
+        <div class="page-header rise">
+          <div class="page-header-text">
+            <h1 class="gradient-text">Лидерборд</h1>
+            <p>Топ участников Медиаволны</p>
+          </div>
+          <button id="rating-refresh" class="action-btn" type="button"><i data-feather="refresh-cw"></i></button>
         </div>
-        <button id="sched-refresh" class="btn-icon" type="button" title="Обновить"><i data-feather="refresh-cw"></i></button>
-      </div>
-      <div id="schedule" class="grid-layout">
-        <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
-      </div>
-    </section>
+        <div id="rating" class="rating-list rise rise-1">
+          <div class="skel h18"></div><div class="skel h18"></div>
+        </div>
+        <div id="district-rating" class="rating-list rise rise-2" style="margin-top: 24px;"></div>
+      </section>
 
-    <!-- ЗАДАНИЯ -->
-    <section class="sec tab-pane app-pane rise rise-2" data-tab="tasks">
-      <div class="sec-head">
-        <div>
-          <h2>Активности</h2>
-          <div class="sec-sub">Выполняй задания и копи баллы</div>
+      <!-- НАСТРОЙКИ -->
+      <section class="app-pane" data-tab="settings">
+        <div class="page-header rise">
+          <div class="page-header-text">
+            <h1 class="gradient-text">Профиль</h1>
+            <p>Управление настройками</p>
+          </div>
         </div>
-      </div>
-      <div id="tasks" class="grid-layout"></div>
-    </section>
+        <div class="bento-card rise rise-1">
+          <div class="set-row" data-set="vibe" role="button" tabindex="0">
+            <div class="set-icon"><i data-feather="smartphone"></i></div>
+            <div class="grow"><b>Вибрация</b><small>Тактильный отклик</small></div>
+            <div class="sw"><i></i></div>
+          </div>
+          <div class="set-divider"></div>
+          <div class="set-row" data-set="sound" role="button" tabindex="0">
+            <div class="set-icon"><i data-feather="volume-2"></i></div>
+            <div class="grow"><b>Звуки</b><small>Сигналы на действия</small></div>
+            <div class="sw"><i></i></div>
+          </div>
+        </div>
+        
+        <div class="bento-card rise rise-2" style="margin-top: 16px;">
+          <div class="set-row" id="set-district-row" role="button" tabindex="0">
+            <div class="set-icon accent-icon"><i data-feather="map-pin"></i></div>
+            <div class="grow"><b>Ваш округ</b><small id="set-district-val">не выбран</small></div>
+            <div class="chevron"><i data-feather="chevron-right"></i></div>
+          </div>
+          <div class="set-row" id="set-rating-row" style="display:none; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 16px; margin-top: 16px;" role="button" tabindex="0">
+            <div class="set-icon"><i data-feather="eye"></i></div>
+            <div class="grow"><b>Показ в топе</b><small>Видимость для всех</small></div>
+            <div class="sw"><i></i></div>
+          </div>
+        </div>
 
-    <!-- РЕЙТИНГ -->
-    <section class="sec tab-pane app-pane rise rise-3" data-tab="rating">
-      <div class="sec-head">
-        <div>
-          <h2>Лидерборд</h2>
-          <div class="sec-sub">Топ участников слёта</div>
+        <div id="admin-entry" style="display:none; margin-top: 24px;" class="rise rise-3">
+          <button id="btn-admin-open" class="btn-primary" type="button">
+            <i data-feather="shield"></i> Панель администратора
+          </button>
         </div>
-        <button id="rating-refresh" class="btn-icon" type="button" title="Обновить"><i data-feather="refresh-cw"></i></button>
-      </div>
-      <div id="rating" class="rating-list">
-        <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
-      </div>
-      <div id="district-rating" class="rating-list"></div>
-    </section>
+      </section>
+    </main>
 
-    <!-- НАСТРОЙКИ -->
-    <section class="sec tab-pane app-pane rise rise-4" data-tab="settings">
-      <div class="sec-head">
-        <div>
-          <h2>Профиль</h2>
-          <div class="sec-sub">Управление аккаунтом</div>
-        </div>
-      </div>
-      <div class="card glass-card">
-        <div class="set-row" data-set="vibe" role="button" tabindex="0">
-          <div class="grow"><b>Вибрация</b><small>Тактильный отклик</small></div>
-          <div class="sw"><i></i></div>
-        </div>
-        <div class="set-row" data-set="sound" role="button" tabindex="0">
-          <div class="grow"><b>Звуки</b><small>Сигналы на действия</small></div>
-          <div class="sw"><i></i></div>
-        </div>
-        <div class="set-row" id="set-district-row" role="button" tabindex="0">
-          <div class="grow"><b>Мой округ</b><small id="set-district-val" class="highlight-text">не выбран</small></div>
-          <div class="action-icon"><i data-feather="chevron-right"></i></div>
-        </div>
-        <div class="set-row" id="set-rating-row" style="display:none" role="button" tabindex="0">
-          <div class="grow"><b>Показ в рейтинге</b><small>Открытый профиль</small></div>
-          <div class="sw"><i></i></div>
-        </div>
-      </div>
-      <div class="card glass-card" id="admin-entry" style="display:none; margin-top: 16px;">
-        <button id="btn-admin-open" class="btn btn-block btn-admin" type="button">
-          <i data-feather="shield"></i> Панель администратора
-        </button>
-      </div>
-    </section>
+    <!-- Изящный мобильный докбар -->
+    <nav class="dock-nav">
+      <button class="dock-item on" data-tab="schedule" type="button">
+        <i data-feather="calendar"></i>
+        <span>План</span>
+      </button>
+      <button class="dock-item" data-tab="tasks" type="button">
+        <i data-feather="zap"></i>
+        <span>Задания</span>
+      </button>
+      <button class="dock-item" data-tab="rating" type="button">
+        <i data-feather="award"></i>
+        <span>Рейтинг</span>
+      </button>
+      <button class="dock-item" data-tab="settings" type="button">
+        <i data-feather="user"></i>
+        <span>Профиль</span>
+      </button>
+    </nav>
   </div>
 
-  <nav class="dock">
-    <button class="dock-item on" data-tab="schedule" type="button">
-      <div class="dock-icon"><i data-feather="calendar"></i></div>
-      <span>План</span>
-    </button>
-    <button class="dock-item" data-tab="tasks" type="button">
-      <div class="dock-icon"><i data-feather="zap"></i></div>
-      <span>Задания</span>
-    </button>
-    <button class="dock-item" data-tab="rating" type="button">
-      <div class="dock-icon"><i data-feather="award"></i></div>
-      <span>Топ</span>
-    </button>
-    <button class="dock-item" data-tab="settings" type="button">
-      <div class="dock-icon"><i data-feather="user"></i></div>
-      <span>Профиль</span>
-    </button>
-  </nav>
-
-  <script src="js/firebase-config.js?v=28"></script>
-  <script src="js/districts.js?v=28"></script>
-  <script src="js/schedule.js?v=28"></script>
-  <script src="js/vk.js?v=28"></script>
-  <script src="js/app.js?v=28"></script>
+  <script src="js/firebase-config.js?v=29"></script>
+  <script src="js/districts.js?v=29"></script>
+  <script src="js/schedule.js?v=29"></script>
+  <script src="js/vk.js?v=29"></script>
+  <script src="js/app.js?v=29"></script>
   <script>
     (function () {
       var hash = location.hash || '';
