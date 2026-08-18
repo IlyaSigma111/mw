@@ -2,155 +2,135 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover">
-  <meta name="theme-color" content="#000000">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12121A">
   <title>МедиаволнApp</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=29">
-  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=30">
+  <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <!-- VK Bridge -->
   <script src="js/vk-bridge.js"></script>
   <script>
     if (typeof vkBridge !== 'undefined') {
       vkBridge.send('VKWebAppInit').catch(function() {});
     }
   </script>
+  <!-- Feather Icons -->
   <script src="https://unpkg.com/feather-icons"></script>
 </head>
 <body>
   <div id="toasts"></div>
 
-  <div class="mobile-wrapper">
-    <!-- Инновационный плавающий заголовок (Sticky Header) -->
-    <header class="top-nav">
-      <div class="user-pill rise">
-        <div id="hdr-avatar" class="pill-avatar"></div>
-        <div class="pill-info">
-          <div id="hdr-name" class="pill-name">Загрузка...</div>
-          <div class="pill-role">Участник слёта</div>
-        </div>
-        <div class="pill-score">
-          <span id="score-num">0</span> <i data-feather="zap"></i>
-        </div>
-      </div>
+  <div class="shell">
+    <!-- Верхняя панель — на уровне шапки VK (крестик / ⋯ справа вверху) -->
+    <header class="appbar">
+      <span class="appbar-logo"><i data-feather="activity"></i> МедиаволнApp</span>
     </header>
 
-    <main class="main-content">
-      <!-- РАСПИСАНИЕ -->
-      <section class="app-pane active" data-tab="schedule">
-        <div class="page-header rise">
-          <div class="page-header-text">
-            <h1 class="gradient-text">Расписание</h1>
-            <p>Ваши события на сегодня</p>
-          </div>
-          <button id="sched-refresh" class="action-btn" type="button"><i data-feather="refresh-cw"></i></button>
-        </div>
-        <div id="schedule" class="bento-grid rise rise-1">
-          <!-- Скелетоны -->
-          <div class="skel h18"></div><div class="skel h18"></div>
-        </div>
-      </section>
+    <!-- Шапка участника: аватар, имя, баллы -->
+    <header class="hdr rise">
+      <div id="hdr-avatar" class="hdr-avatar"></div>
+      <div id="hdr-name" class="hdr-name"><span>…</span></div>
+      <div class="hdr-score"><span id="score-num">0</span></div>
+    </header>
 
-      <!-- ЗАДАНИЯ -->
-      <section class="app-pane" data-tab="tasks">
-        <div class="page-header rise">
-          <div class="page-header-text">
-            <h1 class="gradient-text">Активности</h1>
-            <p>Выполняйте задания и получайте баллы</p>
-          </div>
-        </div>
-        <div id="tasks" class="task-list rise rise-1"></div>
-      </section>
-
-      <!-- РЕЙТИНГ -->
-      <section class="app-pane" data-tab="rating">
-        <div class="page-header rise">
-          <div class="page-header-text">
-            <h1 class="gradient-text">Лидерборд</h1>
-            <p>Топ участников Медиаволны</p>
-          </div>
-          <button id="rating-refresh" class="action-btn" type="button"><i data-feather="refresh-cw"></i></button>
-        </div>
-        <div id="rating" class="rating-list rise rise-1">
-          <div class="skel h18"></div><div class="skel h18"></div>
-        </div>
-        <div id="district-rating" class="rating-list rise rise-2" style="margin-top: 24px;"></div>
-      </section>
-
-      <!-- НАСТРОЙКИ -->
-      <section class="app-pane" data-tab="settings">
-        <div class="page-header rise">
-          <div class="page-header-text">
-            <h1 class="gradient-text">Профиль</h1>
-            <p>Управление настройками</p>
-          </div>
-        </div>
-        <div class="bento-card rise rise-1">
-          <div class="set-row" data-set="vibe" role="button" tabindex="0">
-            <div class="set-icon"><i data-feather="smartphone"></i></div>
-            <div class="grow"><b>Вибрация</b><small>Тактильный отклик</small></div>
-            <div class="sw"><i></i></div>
-          </div>
-          <div class="set-divider"></div>
-          <div class="set-row" data-set="sound" role="button" tabindex="0">
-            <div class="set-icon"><i data-feather="volume-2"></i></div>
-            <div class="grow"><b>Звуки</b><small>Сигналы на действия</small></div>
-            <div class="sw"><i></i></div>
-          </div>
-        </div>
-        
-        <div class="bento-card rise rise-2" style="margin-top: 16px;">
-          <div class="set-row" id="set-district-row" role="button" tabindex="0">
-            <div class="set-icon accent-icon"><i data-feather="map-pin"></i></div>
-            <div class="grow"><b>Ваш округ</b><small id="set-district-val">не выбран</small></div>
-            <div class="chevron"><i data-feather="chevron-right"></i></div>
-          </div>
-          <div class="set-row" id="set-rating-row" style="display:none; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 16px; margin-top: 16px;" role="button" tabindex="0">
-            <div class="set-icon"><i data-feather="eye"></i></div>
-            <div class="grow"><b>Показ в топе</b><small>Видимость для всех</small></div>
-            <div class="sw"><i></i></div>
-          </div>
-        </div>
-
-        <div id="admin-entry" style="display:none; margin-top: 24px;" class="rise rise-3">
-          <button id="btn-admin-open" class="btn-primary" type="button">
-            <i data-feather="shield"></i> Панель администратора
-          </button>
-        </div>
-      </section>
-    </main>
-
-    <!-- Изящный мобильный докбар -->
-    <nav class="dock-nav">
-      <button class="dock-item on" data-tab="schedule" type="button">
+    <!-- РАСПИСАНИЕ (открыто по умолчанию) -->
+    <section class="sec tab-pane app-pane rise rise-1 active" data-tab="schedule">
+      <div class="sec-head">
         <i data-feather="calendar"></i>
-        <span>План</span>
-      </button>
-      <button class="dock-item" data-tab="tasks" type="button">
+        <h2>Расписание</h2>
+        <button id="sched-refresh" class="link-btn" type="button" style="margin-left:auto" title="Обновить из админки">Обновить</button>
+      </div>
+      <div id="schedule">
+        <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
+      </div>
+    </section>
+
+    <!-- ЗАДАНИЯ -->
+    <section class="sec tab-pane app-pane rise rise-2" data-tab="tasks">
+      <div class="sec-head">
         <i data-feather="zap"></i>
-        <span>Задания</span>
-      </button>
-      <button class="dock-item" data-tab="rating" type="button">
+        <h2>Задания</h2>
+      </div>
+      <div class="sec-sub">Выполняй и получай баллы</div>
+      <div id="tasks"></div>
+    </section>
+
+    <!-- РЕЙТИНГ -->
+    <section class="sec tab-pane app-pane rise rise-3" data-tab="rating">
+      <div class="sec-head">
         <i data-feather="award"></i>
-        <span>Рейтинг</span>
-      </button>
-      <button class="dock-item" data-tab="settings" type="button">
-        <i data-feather="user"></i>
-        <span>Профиль</span>
-      </button>
-    </nav>
+        <h2>Рейтинг</h2>
+        <button id="rating-refresh" class="link-btn" type="button" style="margin-left:auto" title="Обновить рейтинг">Обновить</button>
+      </div>
+      <div class="sec-sub">Топ-10 · обновляется по кнопке</div>
+      <div id="rating">
+        <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
+      </div>
+      <div id="district-rating"></div>
+    </section>
+
+    <!-- НАСТРОЙКИ (локально, без БД) -->
+    <section class="sec tab-pane app-pane rise rise-4" data-tab="settings">
+      <div class="sec-head">
+        <i data-feather="settings"></i>
+        <h2>Настройки</h2>
+      </div>
+      <div class="sec-sub">Хранятся на устройстве · вибрация работает в приложении ВК на телефоне</div>
+      <div class="card">
+        <div class="set-row" data-set="vibe" role="button" tabindex="0">
+          <div class="grow"><b>Вибрация</b><small>тактильный отклик на действия</small></div>
+          <div class="sw"><i></i></div>
+        </div>
+        <div class="set-row" data-set="sound" role="button" tabindex="0">
+          <div class="grow"><b>Звук</b><small>короткие сигналы на события</small></div>
+          <div class="sw"><i></i></div>
+        </div>
+        <div class="set-row" id="set-district-row" role="button" tabindex="0">
+          <div class="grow"><b>Округ</b><small id="set-district-val">не выбран</small></div>
+          <i data-feather="map-pin"></i>
+        </div>
+        <div class="set-row" id="set-rating-row" style="display:none" role="button" tabindex="0">
+          <div class="grow"><b>Показываться в рейтинге</b><small>организатор скрыт из таблицы по умолчанию</small></div>
+          <div class="sw"><i></i></div>
+        </div>
+      </div>
+      <div class="card" id="admin-entry" style="display:none">
+        <button id="btn-admin-open" class="btn btn-ghost btn-block" type="button">
+          <i data-feather="sliders"></i> Панель администратора
+        </button>
+      </div>
+    </section>
   </div>
 
-  <script src="js/firebase-config.js?v=29"></script>
-  <script src="js/districts.js?v=29"></script>
-  <script src="js/schedule.js?v=29"></script>
-  <script src="js/vk.js?v=29"></script>
-  <script src="js/app.js?v=29"></script>
+  <!-- Докбар: Расписание · Задания · Рейтинг · Настройки -->
+  <nav class="dock">
+    <button class="dock-item on" data-tab="schedule" type="button">
+      <i data-feather="calendar"></i><span>Расписание</span>
+    </button>
+    <button class="dock-item" data-tab="tasks" type="button">
+      <i data-feather="zap"></i><span>Задания</span>
+    </button>
+    <button class="dock-item" data-tab="rating" type="button">
+      <i data-feather="award"></i><span>Рейтинг</span>
+    </button>
+    <button class="dock-item" data-tab="settings" type="button">
+      <i data-feather="settings"></i><span>Настройки</span>
+    </button>
+  </nav>
+
+  <script src="js/firebase-config.js?v=31"></script>
+  <script src="js/districts.js?v=31"></script>
+  <script src="js/schedule.js?v=31"></script>
+  <script src="js/vk.js?v=31"></script>
+  <script src="js/app.js?v=30"></script>
   <script>
+    /* Вход в админку по deep-link: ...vk.com/app54716297#admin */
     (function () {
       var hash = location.hash || '';
       var deeplink = '';
@@ -162,3 +142,4 @@
   </script>
 </body>
 </html>
+
