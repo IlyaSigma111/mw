@@ -1,4 +1,6 @@
-/* ============================================================
+import re
+
+css = '''/* ============================================================
    МедиаволнApp — MATERIAL YOU (M3) DESIGN
    Тёмная тема, скругления 28px, тональные поверхности, без теней.
    ============================================================ */
@@ -226,3 +228,17 @@ body { padding-bottom: 120px; font-size: 16px; line-height: 1.5; }
 .modal { background: var(--surface); width: 100%; border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 32px 24px 48px; max-height: 85vh; overflow-y: auto; }
 
 .empty { text-align: center; color: var(--text-dim); padding: 32px; }
+'''
+
+open('css/styles.css', 'w', encoding='utf-8').write(css)
+
+html = open('index.html', encoding='utf-8').read()
+html = re.sub(r'<button class="dock-item(.*?)><i data-feather="(.*?)"></i></button>', r'<button class="dock-item\1><div class="dock-icon-wrap"><i data-feather="\2"></i></div><span class="dock-label-\2"></span></button>', html)
+
+html = html.replace('<span class="dock-label-calendar"></span>', '<span>План</span>')
+html = html.replace('<span class="dock-label-zap"></span>', '<span>Баллы</span>')
+html = html.replace('<span class="dock-label-award"></span>', '<span>Топ</span>')
+html = html.replace('<span class="dock-label-user"></span>', '<span>Профиль</span>')
+
+html = html.replace('v=33', 'v=34')
+open('index.html', 'w', encoding='utf-8').write(html)
