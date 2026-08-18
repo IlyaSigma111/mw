@@ -607,6 +607,7 @@ function renderUsers() {
     '<div class="row-actions">' +
     '<button class="btn btn-ghost btn-sm" data-pm="' + u.uid + '" type="button">−1</button>' +
     '<button class="btn btn-ghost btn-sm" data-pp="' + u.uid + '" type="button">+1</button>' +
+    '<button class="btn btn-ghost btn-sm" data-toggle-hide="' + u.uid + '" type="button">' + (u.showInRating === false ? 'Вернуть' : 'Скрыть') + '</button>' +
     '<button class="btn btn-ghost btn-sm" data-set="' + u.uid + '" type="button">Установить</button>' +
     '</div></div>'
   ).join('');
@@ -862,6 +863,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (pp) { changeUserScore(pp.dataset.pp, 1); return; }
     const set = e.target.closest('[data-set]');
     if (set) { setUserScore(set.dataset.set); return; }
+    const th = e.target.closest('[data-toggle-hide]');
+    if (th) { toggleUserHide(th.dataset.toggleHide); return; }
   });
 
   initAdmin();
@@ -871,4 +874,17 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
+}
+
+async function toggleUserHide(uid) {
+  const u = usersCache.find(x => x.uid === uid);
+  if (!u) return;
+  const newVal = u.showInRating === false ? true : false;
+  try {
+    await db.collection('users').doc(uid).update({ showInRating: newVal });
+    await loadUsers();
+    renderStats();
+  } catch(e) {
+    showToast('Ошибка', true);
+  }
 }
