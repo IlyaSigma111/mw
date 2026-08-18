@@ -1,0 +1,19 @@
+15: let myRole = 'student';          // 'student' | 'organizer' (роль из пикера округа)
+16: let myShowInRating = true;       // участник: всегда true; организатор: по умолчанию false
+130:   const roleLabel = myIsAdmin ? 'админ' : (myRole === ROLE_ORGANIZER ? 'организатор' : 'участник слёта');
+217:       myRole = myIsAdmin ? ROLE_ORGANIZER : ROLE_STUDENT;
+220:       myShowInRating = myRole === ROLE_ORGANIZER
+267:     myRole = myIsAdmin ? ROLE_ORGANIZER : ROLE_STUDENT;
+268:     myShowInRating = myRole === ROLE_ORGANIZER
+269:       ? (d ? d.showInRating !== false : myShowInRating)
+275:     myRole = ROLE_ORGANIZER;
+276:     myShowInRating = false;
+334:     myRole = role;
+335:     myShowInRating = showInRating;
+344:   myRole = role;
+345:   myShowInRating = showInRating;
+1010:   const isOrg = myIsAdmin && myRole === ROLE_ORGANIZER;
+1012:   row.classList.toggle('on', isOrg && myShowInRating);
+1021:     if (!(myIsAdmin && myRole === ROLE_ORGANIZER)) return;
+1023:     myShowInRating = !myShowInRating;
+1028:         showInRating: myShowInRating, score: myScore, vkId: String(myVkId),

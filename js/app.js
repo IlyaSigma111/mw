@@ -14,7 +14,8 @@ let myName = '';   // «Имя Фамилия» — подпись под фот
 let myScore = 0;   // текущие баллы
 let myDistrict = '';    // округ участника
 let myRole = 'student';          // 'student' | 'organizer' (роль из пикера округа)
-let myShowInRating = true;       // участник: всегда true; организатор: по умолчанию false
+let myShowInRating = true;
+let myGlowAnim = true;       // участник: всегда true; организатор: по умолчанию false
 let myIsAdmin = false;  // админ панели (VK ID в config/admins) — отдельно от роли в рейтинге
 
 const ROLE_ORGANIZER = 'organizer';
@@ -269,12 +270,14 @@ function ensureDistrict(d) {
     myShowInRating = myRole === ROLE_ORGANIZER
       ? (d ? d.showInRating !== false : myShowInRating)
       : true;
+    myGlowAnim = d && d.glowAnim !== undefined ? d.glowAnim : true;
     try { localStorage.setItem(DISTRICT_KEY, myDistrict); } catch (e) {}
   } else if (myIsAdmin) {
     // Организатор без округа: не принуждаем к выбору при входе — он сам выберет
     // округ в настройках, если хочет участвовать в рейтинге от своего округа.
     myRole = ROLE_ORGANIZER;
     myShowInRating = false;
+    myGlowAnim = true;
     try { localStorage.removeItem(DISTRICT_KEY); } catch (e) {}
   } else {
     try { localStorage.setItem(DISTRICT_ASKED_KEY, '1'); } catch (e) {}
@@ -334,6 +337,7 @@ async function saveDistrict(name) {
     myDistrict = name;
     myRole = role;
     myShowInRating = showInRating;
+  myGlowAnim = true;
     updateHeaderSub();
     renderDistrictVal();
     renderRatingToggle();
@@ -344,6 +348,7 @@ async function saveDistrict(name) {
   myDistrict = name;
   myRole = role;
   myShowInRating = showInRating;
+  myGlowAnim = true;
   updateHeaderSub();
   renderDistrictVal();
   renderRatingToggle();
@@ -1007,10 +1012,16 @@ function renderSettings() {
    строки нет вообще (showInRating всегда true). */
 function renderRatingToggle() {
   const row = document.getElementById('set-rating-row');
+  const animRow = document.getElementById('set-anim-row');
   if (!row) return;
   const isOrg = myIsAdmin && myRole === ROLE_ORGANIZER;
   row.style.display = isOrg ? 'flex' : 'none';
   row.classList.toggle('on', isOrg && myShowInRating);
+  
+  if (animRow) {
+    animRow.style.display = (isOrg && myShowInRating) ? 'flex' : 'none';
+    animRow.classList.toggle('on', myGlowAnim !== false);
+  }
 }
 
 /* Клик по тумблеру рейтинга (организатор): пишем флаг в профиль, а не в локальные
@@ -1069,7 +1080,7 @@ function renderRating(listOverride) {
   const rows = list.map((u, i) => {
     const rankCls = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
     const me = myVkId && String(u.vkId) === myVkId ? ' rate-me' : '';
-    const adminCls = u.role === 'organizer' ? ' rate-admin-glow' : '';
+    const adminCls = u.role === 'organizer' && u.glowAnim !== false ? ' rate-admin-glow' : '';
     const avatarInner = u.avatar
       ? '<img class="rate-avatar" src="' + escapeHtml(u.avatar) + '" alt="">'
       : '<div class="rate-avatar">' + escapeHtml((u.name || '?')[0]) + '</div>';
