@@ -12,6 +12,7 @@ let myUid = '';    // users/<uid> текущего участника
 let myVkId = '';   // VK ID участника (общий для всех устройств)
 let myName = '';   // «Имя Фамилия» — подпись под фото
 let myScore = 0;   // текущие баллы
+let myAvatar = ''; // VK_ID фото для «твоего блока» в рейтинге
 let myDistrict = '';    // округ участника
 let myRole = 'student';          // 'student' | 'organizer' (роль из пикера округа)
 let myShowInRating = true;
@@ -62,6 +63,7 @@ async function init() {
     myUid = DEV_MODE ? 'dev-user' : 'vk_' + String(vk.id);
     myVkId = DEV_MODE ? '' : String(vk.id);
     myName = DEV_MODE ? 'DEV-пользователь' : (vk.first_name + ' ' + vk.last_name).trim();
+    myAvatar = DEV_MODE ? '' : (vk.photo_100 || '');
 
     // 4. Рендер + подписки
     renderHeader(vk);
@@ -224,6 +226,7 @@ function subscribeScore(uid, vk) {
         : true;
       ensureDistrict(d);
       renderRatingToggle();
+      renderMyRatingBlock();
       // Синхронизируем «выполненные задания» с других устройств.
       // done может быть как map'ом {id: счётчик}, так и старым массивом id.
       let changed = false;
@@ -272,15 +275,16 @@ function ensureDistrict(d) {
       : true;
     myGlowAnim = d && d.glowAnim !== undefined ? d.glowAnim : true;
     try { localStorage.setItem(DISTRICT_KEY, myDistrict); } catch (e) {}
-  } else if (myIsAdmin) {
-    // Организатор без округа: не принуждаем к выбору при входе — он сам выберет
-    // округ в настройках, если хочет участвовать в рейтинге от своего округа.
-    myRole = ROLE_ORGANIZER;
+  } else {
+    // Нет округа в профиле — значит округ ещё не выбран.
+    // Стираем устаревший кеш и ОБЯЗАТЕЛЬНО показываем окно выбора
+    // на первом входе — в том числе админам (у них в пикере есть
+    // отдельная опция «Организатор»).
+    myDistrict = '';
+    myRole = myIsAdmin ? ROLE_ORGANIZER : ROLE_STUDENT;
     myShowInRating = false;
     myGlowAnim = true;
     try { localStorage.removeItem(DISTRICT_KEY); } catch (e) {}
-  } else {
-    try { localStorage.setItem(DISTRICT_ASKED_KEY, '1'); } catch (e) {}
     showDistrictPicker();
   }
   updateHeaderSub();
@@ -492,21 +496,31 @@ async function refreshSchedule() {
    а повторные открытия вкладки/тыки по «Обновить» отдаём из кэша 60 сек —
    спам-тапами дневной лимит чтений не пробить. */
 const RATING_CACHE_KEY = 'mw_rating_cache_v1';
-const RATING_TTL = 60 * 1000;
-// «Показать всех» читает ВСЕ документы участников (~150 чтений), поэтому кэш 30 минут:
-// повторные разворачивания не тратят ни одного чтения.
-const RATING_ALL_CACHE_KEY = 'mw_rating_all_cache_v1';
-const RATING_ALL_TTL = 30 * 60 * 1000;
-let ratingData = [];
-let ratingTop = [];        // топ-10 (последний ответ) — сворачиваемся обратно в него
-let ratingExpanded = false;
+const RATING_TTL = 10 * 60 * 1000;
+// Рейтинг округов приходит из ОДНОГО документа-агрегата rating/districts,
+// который админка пересчитывает после начислений. 1 чтение вместо ~150.
+const DISTRICT_RATING_CACHE_KEY = 'mw_district_rating_v1';
+const DISTRICT_RATING_TTL = 10 * 60 * 1000;
+let ratingTop = [];        // топ-10 (последний ответ)
 let ratingLoading = false;
 
-function ratingAllCached() {
+function districtRatingCached() {
   try {
-    const c = JSON.parse(localStorage.getItem(RATING_ALL_CACHE_KEY) || 'null');
-    return (c && Array.isArray(c.list) && Date.now() - c.ts < RATING_ALL_TTL) ? c.list : null;
+    const c = JSON.parse(localStorage.getItem(DISTRICT_RATING_CACHE_KEY) || 'null');
+    return (c && Array.isArray(c.list) && Date.now() - c.ts < DISTRICT_RATING_TTL) ? c.list : null;
   } catch (e) { return null; }
+}
+
+/* Время последней успешной загрузки топ-10 в шапке рейтинга. Берём ts из
+   кэша — честно показывает, когда данные реально получены с Firestore. */
+function renderRatingFresh() {
+  const el = document.getElementById('rating-fresh');
+  if (!el) return;
+  let ts = 0;
+  try { const c = JSON.parse(localStorage.getItem(RATING_CACHE_KEY) || 'null'); if (c) ts = c.ts || 0; } catch (e) {}
+  if (!ts) { el.textContent = '–:–'; return; }
+  const d = new Date(ts);
+  el.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }
 
 /* Организаторы (роль из пикера) скрыты из рейтинга по умолчанию; тумблер
@@ -524,8 +538,6 @@ async function loadRating() {
     const cached = JSON.parse(localStorage.getItem(RATING_CACHE_KEY) || 'null');
     if (cached && Array.isArray(cached.list) && Date.now() - cached.ts < RATING_TTL) {
       ratingTop = cached.list.filter(ratingVisible);
-      ratingData = ratingTop;
-      ratingExpanded = false;
       renderRating();
       return;
     }
@@ -537,8 +549,6 @@ async function loadRating() {
   try {
     const snap = await db.collection('users').orderBy('score', 'desc').limit(10).get();
     ratingTop = snap.docs.map((d) => ({ uid: d.id, ...d.data() })).filter(ratingVisible);
-    ratingData = ratingTop;
-    ratingExpanded = false;
     try { localStorage.setItem(RATING_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: ratingTop })); } catch (e) {}
     renderRating();
   } catch (err) {
@@ -548,59 +558,33 @@ async function loadRating() {
   }
 }
 
-/* «Показать всех»: разворачивает топ-10 до полного списка. ~150 чтений за свежий
-   запрос, но кэш 30 мин превращает повторные тыки в 0 чтений. */
-async function loadRatingAll() {
-  if (DEV_MODE || ratingLoading) return;
-  if (!db) { showToast('Приложение ещё не готово, обнови страницу', true); return; }
-  const all = ratingAllCached();
-  if (all) {
-    ratingData = all.filter(ratingVisible);
-    ratingExpanded = true;
-    renderRating();
-    return;
-  }
-  ratingLoading = true;
-  try {
-    const snap = await db.collection('users').orderBy('score', 'desc').get();
-    const fresh = snap.docs.map((d) => ({ uid: d.id, ...d.data() })).filter(ratingVisible);
-    try { localStorage.setItem(RATING_ALL_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: fresh })); } catch (e) {}
-    ratingTop = fresh.slice(0, 10);
-    ratingData = fresh;
-    ratingExpanded = true;
-    renderRating();
-  } catch (err) {
-    showToast('Рейтинг недоступен', true);
-  } finally {
-    ratingLoading = false;
-  }
-}
-
 /* ---------- Рейтинг округов ----------
-   Сумма баллов по округам (команда = округ). Считается из полного кэша
-   ratingAllCached (30 мин), поэтому отдельно подгружаем его «тихо» при
-   первом открытии вкладки — не разворачивая список участников. */
-function ratingByDistrict(list) {
-  const agg = {};
-  (list || []).forEach((u) => {
-    const d = String(u.district || '').trim();
-    if (!d || d === 'Организатор') return;
-    agg[d] = (agg[d] || 0) + (Number(u.score) || 0);
-  });
-  return Object.keys(agg)
-    .map((name) => ({ district: name, score: agg[name] }))
-    .sort((a, b) => b.score - a.score);
+   Сумма баллов по округам (команда = округ). Приходит из ОДНОГО документа
+   rating/districts (агрегат), который админка пересчитывает после начислений —
+   так участникам не читать все ~150 документов ради одной цифры. */
+async function loadRatingDistricts(force) {
+  if (DEV_MODE) return;
+  if (!db) return;
+  const cached = districtRatingCached();
+  if (!force && cached) { renderDistrictRating(); return; }
+  try {
+    const snap = await db.doc('rating/districts').get();
+    const list = snap.exists && Array.isArray(snap.data().list) ? snap.data().list : [];
+    try { localStorage.setItem(DISTRICT_RATING_CACHE_KEY, JSON.stringify({ ts: Date.now(), list })); } catch (e) {}
+    renderDistrictRating();
+  } catch (err) {
+    /* молчим — округа останутся «загружаются» */
+  }
 }
 
 function renderDistrictRating() {
   const wrap = document.getElementById('district-rating');
   if (!wrap) return;
-  const all = ratingAllCached();
-  if (!all) {
+  const rows = districtRatingCached();
+  if (!rows) {
     wrap.innerHTML = '<div class="hint">Рейтинг округов загружается…</div>';
     return;
   }
-  const rows = ratingByDistrict(all.filter(ratingVisible));
   if (!rows.length) {
     wrap.innerHTML = '<div class="hint">По округам пока нет данных</div>';
     return;
@@ -614,21 +598,6 @@ function renderDistrictRating() {
       '<div class="rate-pts">' + r.score + '</div>' +
       '</div>'
     ).join('');
-}
-
-/* Тихая загрузка полного кэша рейтинга (для округов), не разворачивает список. */
-function ensureRatingAllQuiet(force) {
-  if (DEV_MODE || ratingLoading || (!force && ratingAllCached())) return;
-  if (!db) return;
-  ratingLoading = true;
-  db.collection('users').orderBy('score', 'desc').get()
-    .then((snap) => {
-      const fresh = snap.docs.map((d) => ({ uid: d.id, ...d.data() })).filter(ratingVisible);
-      try { localStorage.setItem(RATING_ALL_CACHE_KEY, JSON.stringify({ ts: Date.now(), list: fresh })); } catch (e) {}
-      renderDistrictRating();
-    })
-    .catch(() => { /* молчим — округа останутся «загружаются» */ })
-    .finally(() => { ratingLoading = false; });
 }
 
 /* ---------- Задания ---------- */
@@ -707,10 +676,17 @@ function taskDayVisible(t) {
   return false;
 }
 
+function taskDistrictVisible(t) {
+  // Командные задания видны только своей команде (округу).
+  if (t.type !== 'district') return true;
+  if (!myDistrict || !t.district) return false;
+  return String(myDistrict).trim().toLowerCase() === String(t.district).trim().toLowerCase();
+}
+
 function renderTasks(list) {
   lastTasks = list;
   const wrap = document.getElementById('tasks');
-  const visible = list.filter((t) => taskDayVisible(t));
+  const visible = list.filter((t) => taskDayVisible(t) && taskDistrictVisible(t));
   const undone = visible.filter((t) => !taskDone(t));
   const doneCount = visible.length - undone.length;
 
@@ -721,15 +697,18 @@ function renderTasks(list) {
   wrap.innerHTML = undone.map((t) => {
     const cnt = taskCount(t);
     const lim = taskLimit(t);
+    const isDistrictTask = t.type === 'district';
     const progress = t.type === 'repeat' ? ' <span class="badge badge-on">' + cnt + '/' + lim + '</span>' : '';
     const dayChip = t.day && String(t.day).trim() ? ' <span class="badge badge-off">' + escapeHtml(t.day) + '</span>' : '';
+    const teamChip = isDistrictTask ? ' <span class="team-chip">⚑ командное · округ «' + escapeHtml(t.district || '') + '»</span>' : '';
     const isMedia = !!(t.withPhoto || t.withVideo);
     const mediaIcon = isMedia ? '<i data-feather="' + (t.withVideo ? 'video' : 'camera') + '"></i>' : '';
     const mediaLabel = t.withPhoto && t.withVideo ? 'Прикрепить файлы' : (t.withVideo ? 'Прикрепить видео' : 'Прикрепить фото');
-    const btnLabel = isMedia ? (cnt > 0 ? 'Ещё раз' : mediaLabel) : (cnt > 0 ? 'Ещё раз' : 'Выполнить');
+    const btnLabel = isDistrictTask ? (cnt > 0 ? 'Отмечено ✓' : 'Отметить участие')
+      : (isMedia ? (cnt > 0 ? 'Ещё раз' : mediaLabel) : (cnt > 0 ? 'Ещё раз' : 'Выполнить'));
     return (
       '<div class="card task rise" data-id="' + t.id + '">' +
-      '<span class="task-text">' + escapeHtml(t.text) + dayChip + '</span>' +
+      '<span class="task-text">' + escapeHtml(t.text) + dayChip + teamChip + '</span>' +
       '<span class="task-pts">+' + t.points + progress + '</span>' +
       '<button class="btn btn-sm' + (isMedia ? ' btn-photo' : '') + '" data-act="do">' + mediaIcon + btnLabel + '</button>' +
       '</div>'
@@ -746,7 +725,9 @@ function renderTasks(list) {
       const task = list.find((t) => t.id === id);
       btn.disabled = true;
       try {
-        if (task.withPhoto || task.withVideo) {
+        if (task.type === 'district') {
+          await signDistrictTask(task);
+        } else if (task.withPhoto || task.withVideo) {
           if (mediaSubmitting) return;
           mediaSubmitting = true;
           vkFeedback('click');
@@ -787,6 +768,25 @@ async function doTask(task) {
   } catch (err) {
     showToast('Не удалось выполнить: ' + err.message, true);
   }
+}
+
+/* Отметка участия в командном задании (тип district).
+   Баллы НЕ начисляются автоматически никому: отметка фиксирует участие
+   на устройстве, а организатор начисляет баллы ВСЕЙ команде через
+   админку (кнопка «Баллы команде округа»). Лимит — один раз. */
+async function signDistrictTask(task) {
+  if (!myDistrict) { showToast('Сначала выбери округ', true); return; }
+  if (String(myDistrict).trim().toLowerCase() !== String(task.district || '').trim().toLowerCase()) {
+    showToast('Задание для команды «' + task.district + '»', true);
+    return;
+  }
+  if (taskDone(task)) { showToast('Участие уже отмечено', true); return; }
+  vkFeedback('success');
+  doneCache[task.id] = 1;
+  try { localStorage.setItem(SELF_DOC_CACHE, JSON.stringify(doneCache)); } catch (e) {}
+  renderTasks(lastTasks);
+  vkToast('Участие отмечено!');
+  showToast('Отмечено. Баллы всей команде начислит организатор');
 }
 
 /* ---------- Медиа-отправка заданий ----------
@@ -928,12 +928,15 @@ async function submitTaskMedia(task, files) {
       taskText: task.text,
       points: task.points,
       mediaType: mediaType,
-      photoB64s: photoB64s,
       sent: false,
       state: 'pending',
       ts: firebase.firestore.FieldValue.serverTimestamp(),
     };
+    // Одно фото живёт в документе, как раньше (бюджетный случай).
+    // Несколько фото — в подколлекции chunks (kind:'photo'), чтобы не пробить
+    // лимит Firestore 1МБ на документ; их собирает и шлёт бот.
     if (photoB64s.length === 1) doc.photoB64 = photoB64s[0];
+    else if (photoB64s.length > 1) doc.photoCount = photoB64s.length;
     if (videoChunkList.length) {
       doc.videoChunks = videoChunkList.length;
       doc.videoName = videoName;
@@ -941,14 +944,19 @@ async function submitTaskMedia(task, files) {
       if (videoChunkList.length === 1) doc.videoB64 = videoChunkList[0];
     }
     const ref = await db.collection('submissions').add(doc);
-    if (videoChunkList.length > 1) {
+    const writeChunks = (arr, kind, prefix) => {
+      if (!arr.length) return;
       const batch = db.batch();
       const chunksCol = db.collection('submissions').doc(ref.id).collection('chunks');
-      videoChunkList.forEach((b64, i) => {
-        batch.set(chunksCol.doc(String(i)), { n: i, uid: myUid, vkId: myVkId, b64: b64 });
+      arr.forEach((b64, i) => {
+        batch.set(chunksCol.doc(prefix + i), { n: i, kind: kind, uid: myUid, vkId: myVkId, b64: b64 });
       });
-      await batch.commit();
-    }
+      return batch.commit();
+    };
+    const videoBatch = videoChunkList.length > 1 ? writeChunks(videoChunkList, 'video', 'v') : null;
+    const photoBatch = photoB64s.length > 1 ? writeChunks(photoB64s, 'photo', 'p') : null;
+    if (videoBatch) await videoBatch;
+    if (photoBatch) await photoBatch;
     const doneMsg = mediaType === 'video' ? 'Видео ушло на модерацию!'
       : mediaType === 'mixed' ? 'Фото и видео ушли на модерацию!'
       : 'Фото ушло на модерацию!';
@@ -966,7 +974,7 @@ function initDock() {
       vkFeedback('click');
       document.querySelectorAll('.dock-item').forEach((b) => b.classList.toggle('on', b === btn));
       document.querySelectorAll('.app-pane').forEach((p) => p.classList.toggle('active', p.dataset.tab === tab));
-      if (tab === 'rating') { loadRating().then(ensureRatingAllQuiet); }
+      if (tab === 'rating') { loadRating(); loadRatingDistricts(); }
     });
   });
 }
@@ -1046,6 +1054,28 @@ function bindRatingToggle() {
   });
 }
 
+/* Тумблер «Анимация карточки» (организатор): флаг glowAnim живёт в профиле (БД),
+   поэтому отключение/включение видно на всех устройствах и сразу. */
+function bindAnimToggle() {
+  const animRow = document.getElementById('set-anim-row');
+  if (!animRow) return;
+  animRow.addEventListener('click', async () => {
+    if (!(myIsAdmin && myRole === ROLE_ORGANIZER && myShowInRating)) return;
+    vkFeedback('click');
+    myGlowAnim = (myGlowAnim !== false) ? false : true;
+    renderRatingToggle();
+    if (DEV_MODE) return;
+    try {
+      await db.collection('users').doc(myUid).update({
+        glowAnim: myGlowAnim !== false, score: myScore, vkId: String(myVkId),
+      });
+    } catch (err) {
+      showToast('Не сохранилось: ' + err.message, true);
+      renderRatingToggle();
+    }
+  });
+}
+
 function bindSettings() {
   document.querySelectorAll('[data-set]').forEach((el) => {
     el.addEventListener('click', () => {
@@ -1072,7 +1102,7 @@ function seedDevData(uid, vk) {
 
 function renderRating(listOverride) {
   const wrap = document.getElementById('rating');
-  const list = listOverride || ratingData;
+  const list = listOverride || ratingTop;
   if (!list.length) {
     wrap.innerHTML = '<div class="empty">Пока никого нет — стань первым!</div>';
     return;
@@ -1096,21 +1126,42 @@ function renderRating(listOverride) {
       '</div>'
     );
   }).join('');
-  const total = ratingAllCached() ? ratingAllCached().length : 0;
-  const more = ratingExpanded
-    ? '<div class="rate-more"><button id="rate-toggle" class="btn btn-ghost btn-block" type="button">Свернуть</button></div>'
-    : '<div class="rate-more"><button id="rate-toggle" class="btn btn-ghost btn-block" type="button">' +
-      (total > 10 ? 'Показать всех (' + total + ')' : 'Показать всех') + '</button></div>';
-  wrap.innerHTML = rows + more;
-  const tbtn = document.getElementById('rate-toggle');
-  if (tbtn) {
-    tbtn.addEventListener('click', () => {
-      vkFeedback('click');
-      if (ratingExpanded) { ratingExpanded = false; ratingData = ratingTop; renderRating(); }
-      else loadRatingAll();
-    });
-  }
+  wrap.innerHTML = rows;
+  renderRatingFresh();
+  renderMyRatingBlock();
   renderDistrictRating();
+}
+
+/* «Твой блок» под топ-10: место в десятке ИЛИ отставание до неё. Ничего не
+   читает из БД — считается из уже загруженного топ-10 и профиля (0 чтений). */
+function renderMyRatingBlock() {
+  const wrap = document.getElementById('my-rating-block');
+  if (!wrap) return;
+  if (!myUid) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  if (myShowInRating === false) {
+    wrap.innerHTML =
+      '<div class="rate-mine"><div class="grow">' +
+      '<b>Ты скрыт из рейтинга</b>' +
+      '<small>Включи «Показываться в рейтинге» в настройках, и твой блок появится.</small>' +
+      '</div></div>';
+    return;
+  }
+  const score = Number(myScore) || 0;
+  const idx = ratingTop.findIndex((u) => u.uid === myUid);
+  const avatarInner = myAvatar
+    ? '<img class="rate-avatar" src="' + escapeHtml(myAvatar) + '" alt="">'
+    : '<div class="rate-avatar">' + escapeHtml((myName || '?')[0]) + '</div>';
+  let body;
+  if (idx >= 0) {
+    body = '<b>Ты — на ' + (idx + 1) + '-м месте!</b><small>Баллов: ' + score + '</small>';
+  } else {
+    const tenth = ratingTop.length ? (Number(ratingTop[ratingTop.length - 1].score) || 0) : 0;
+    const need = Math.max(0, tenth - score + 1);
+    const dist = myDistrict ? ' · команда «' + escapeHtml(myDistrict) + '»' : '';
+    body = '<b>Ты вне топ-10</b><small>До десятки не хватает ' + need + ' баллов' + dist + '</small>';
+  }
+  wrap.innerHTML = '<div class="rate-mine">' + avatarInner + '<div class="grow">' + body + '</div></div>';
 }
 
 /* ---------- Запуск ---------- */
@@ -1123,7 +1174,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (ratingRefresh) {
     ratingRefresh.addEventListener('click', () => {
       vkFeedback('click');
-      localStorage.removeItem('mw_rating_all'); loadRating().then(() => ensureRatingAllQuiet(true));
+      localStorage.removeItem(RATING_CACHE_KEY);
+      loadRating();
+      loadRatingDistricts(true);
+      renderMyRatingBlock();
     });
   }
   const adminBtn = document.getElementById('btn-admin-open');
@@ -1141,4 +1195,5 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSettings();
   bindSettings();
   bindRatingToggle();
+  bindAnimToggle();
 });

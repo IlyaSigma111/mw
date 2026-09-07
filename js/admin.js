@@ -221,6 +221,10 @@ function openPresetEditor() {
     '<input id="edit-name" class="input" value="' + escapeHtml(editPreset.name) + '" placeholder="Например: День 2 — Команды"></div>' +
     '<div id="edit-events"></div>' +
     '<button id="edit-add-ev" class="btn btn-ghost btn-block" type="button">+ Добавить событие</button>' +
+    '<div class="field" style="margin-top:12px"><label>Быстрый ввод из текста</label>' +
+    '<textarea id="edit-import" class="input" rows="4" placeholder="10:00 | Открытие слёта&#10;12:30 | Обед&#10;14:00 | Командная игра"></textarea>' +
+    '<button id="edit-import-btn" class="btn btn-ghost btn-sm" type="button">Заполнить список из текста</button>' +
+    '</div>' +
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
     '<button id="edit-cancel" class="btn btn-ghost" type="button">Отмена</button>' +
     '<button id="edit-save" class="btn" type="button">Сохранить пресет</button>' +
@@ -236,6 +240,23 @@ function openPresetEditor() {
   back.querySelector('#edit-name').addEventListener('input', (e) => {
     editPreset.name = e.target.value;
   });
+  const impBtn = back.querySelector('#edit-import-btn');
+  if (impBtn) {
+    impBtn.addEventListener('click', () => {
+      const t = String(back.querySelector('#edit-import').value || '');
+      const rows = t.split('\n')
+        .map((l) => l.trim()).filter(Boolean)
+        .map((l) => {
+          const p = l.split('|').map((s) => s.trim());
+          return { time: p[0] || '', title: p[1] || '' };
+        })
+        .filter((e) => e.time && e.title);
+      if (!rows.length) { showToast('Формат строки: 10:00 | Событие', true); return; }
+      editPreset.events = rows;
+      renderEditEvents();
+      showToast('Загружено ' + rows.length + ' событий');
+    });
+  }
   renderEditEvents();
 }
 
@@ -373,9 +394,10 @@ async function syncTasksAggregate() {
         text: t.text,
         points: t.points,
         active: !!t.active,
-        type: t.type === 'repeat' ? 'repeat' : 'once',
+        type: t.type === 'repeat' ? 'repeat' : (t.type === 'district' ? 'district' : 'once'),
         limit: Math.max(1, Number(t.limit) || 1),
         day: String(t.day || ''),
+        district: String(t.district || ''),
         withPhoto: !!t.withPhoto,
         withVideo: !!t.withVideo,
       })),
@@ -388,7 +410,8 @@ async function syncTasksAggregate() {
 /* Короткое описание типа/лимита/дня задания для списка */
 function taskMeta(t) {
   const bits = [];
-  if (t.type === 'repeat') bits.push('повтор · до ' + Math.max(1, t.limit || 3) + ' раз');
+  if (t.type === 'district') bits.push('Командное · округ «' + escapeHtml(String(t.district || '—')) + '»');
+  else if (t.type === 'repeat') bits.push('повтор · до ' + Math.max(1, t.limit || 3) + ' раз');
   if (t.day && String(t.day).trim()) bits.push('день: ' + escapeHtml(t.day));
   if (t.withPhoto) bits.push('📷 фото');
   if (t.withVideo) bits.push('🎥 видео');
@@ -439,14 +462,15 @@ function parseTaskLines(raw, defPoints) {
 
 async function createTask(text, points, opts) {
   opts = opts || {};
-  const type = opts.type === 'repeat' ? 'repeat' : 'once';
+  const type = opts.type === 'repeat' ? 'repeat' : (opts.type === 'district' ? 'district' : 'once');
   const limit = type === 'repeat' ? Math.max(1, Number(opts.limit) || 1) : 1;
   const day = String(opts.day || '').trim();
+  const district = type === 'district' ? String(opts.district || '').trim() : '';
   const withPhoto = !!opts.withPhoto;
   const withVideo = !!opts.withVideo;
   try {
     if (DEV_MODE) {
-      allTasks.unshift({ id: 'dev-' + Date.now(), text: text, points: points, active: true, type: type, limit: limit, day: day, withPhoto: withPhoto, withVideo: withVideo });
+      allTasks.unshift({ id: 'dev-' + Date.now(), text: text, points: points, active: true, type: type, limit: limit, day: day, district: district, withPhoto: withPhoto, withVideo: withVideo });
       renderTaskList(); showToast('DEV: задание добавлено'); return;
     }
     await db.collection('tasks').add({
@@ -456,6 +480,7 @@ async function createTask(text, points, opts) {
       type: type,
       limit: limit,
       day: day,
+      district: district,
       withPhoto: withPhoto,
       withVideo: withVideo,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -474,10 +499,13 @@ function openTaskEditor(id) {
   const t = allTasks.find((x) => x.id === id);
   if (!t) return;
   editTaskId = id;
-  const type = t.type === 'repeat' ? 'repeat' : 'once';
+  const type = t.type === 'repeat' ? 'repeat' : (t.type === 'district' ? 'district' : 'once');
   const back = document.createElement('div');
   back.className = 'modal-back';
   back.id = 'edit-task-modal';
+  const distOptions = (typeof DISTRICTS !== 'undefined' ? DISTRICTS : [])
+    .map((d) => '<option value="' + escapeHtml(d) + '"' + (t.district === d ? ' selected' : '') + '>' + escapeHtml(d) + '</option>')
+    .join('');
   back.innerHTML =
     '<div class="modal">' +
     '<div class="field"><label>Текст задания</label>' +
@@ -485,11 +513,14 @@ function openTaskEditor(id) {
     '<div class="row-actions" style="justify-content:flex-start;gap:8px;margin-bottom:12px">' +
     '<div class="field" style="margin:0;width:100px"><label>Баллы</label>' +
     '<input id="et-points" class="input" type="number" min="1" value="' + Number(t.points) + '"></div>' +
-    '<div class="field" style="margin:0;width:150px"><label>Тип</label>' +
+    '<div class="field" style="margin:0;width:170px"><label>Тип</label>' +
     '<select id="et-type" class="input"><option value="once"' + (type === 'once' ? ' selected' : '') + '>Обычное</option>' +
-    '<option value="repeat"' + (type === 'repeat' ? ' selected' : '') + '>Повторяемое</option></select></div>' +
+    '<option value="repeat"' + (type === 'repeat' ? ' selected' : '') + '>Повторяемое</option>' +
+    '<option value="district"' + (type === 'district' ? ' selected' : '') + '>Командное (округ)</option></select></div>' +
     '<div class="field" id="et-limit-wrap" style="margin:0;width:110px' + (type === 'repeat' ? '' : ';display:none') + '"><label>Лимит раз</label>' +
     '<input id="et-limit" class="input" type="number" min="1" value="' + (t.limit || 3) + '"></div>' +
+    '<div class="field" id="et-district-wrap" style="margin:0;width:180px' + (type === 'district' ? '' : ';display:none') + '"><label>Округ команды</label>' +
+    '<select id="et-district" class="input"><option value="">— округ —</option>' + distOptions + '</select></div>' +
     '</div>' +
     '<div class="field"><label>День действия (пусто = всегда)</label>' +
     '<input id="et-day" class="input" value="' + escapeHtml(t.day || '') + '" placeholder="Любой день · День 1 · 2026-08-15"></div>' +
@@ -505,7 +536,9 @@ function openTaskEditor(id) {
   back.querySelector('#et-cancel').addEventListener('click', () => back.remove());
   back.querySelector('#et-save').addEventListener('click', saveTaskEdit);
   back.querySelector('#et-type').addEventListener('change', (e) => {
-    document.getElementById('et-limit-wrap').style.display = e.target.value === 'repeat' ? 'block' : 'none';
+    const v = e.target.value;
+    document.getElementById('et-limit-wrap').style.display = v === 'repeat' ? 'block' : 'none';
+    document.getElementById('et-district-wrap').style.display = v === 'district' ? 'block' : 'none';
   });
 }
 
@@ -514,16 +547,18 @@ async function saveTaskEdit() {
   const points = Number(document.getElementById('et-points').value);
   const type = document.getElementById('et-type').value;
   const limit = type === 'repeat' ? Math.max(1, Number(document.getElementById('et-limit').value) || 1) : 1;
+  const district = type === 'district' ? String(document.getElementById('et-district').value || '').trim() : '';
   const day = document.getElementById('et-day').value.trim();
   const active = document.getElementById('et-active').checked;
   const withPhoto = document.getElementById('et-photo').checked;
   const withVideo = document.getElementById('et-video').checked;
   if (!text) { showToast('Введи текст задания', true); return; }
   if (!points || points < 1) { showToast('Баллы ≥ 1', true); return; }
+  if (type === 'district' && !district) { showToast('Выбери округ команды', true); return; }
   try {
     if (DEV_MODE) {
       const t = allTasks.find((x) => x.id === editTaskId);
-      if (t) Object.assign(t, { text: text, points: points, type: type, limit: limit, day: day, active: active, withPhoto: withPhoto, withVideo: withVideo });
+      if (t) Object.assign(t, { text: text, points: points, type: type, limit: limit, day: day, district: district, active: active, withPhoto: withPhoto, withVideo: withVideo });
       renderTaskList();
     } else {
       await db.collection('tasks').doc(editTaskId).update({
@@ -532,6 +567,7 @@ async function saveTaskEdit() {
         type: type,
         limit: limit,
         day: day,
+        district: district,
         active: active,
         withPhoto: withPhoto,
         withVideo: withVideo,
@@ -620,6 +656,7 @@ async function changeUserScore(uid, delta) {
       score: firebase.firestore.FieldValue.increment(delta),
     });
     await loadUsers();
+    syncDistrictsAggregate();
   } catch (err) {
     showToast('Ошибка: ' + err.message, true);
   }
@@ -648,6 +685,7 @@ async function setUserScore(uid) {
     try {
       await db.collection('users').doc(uid).update({ score: value });
       await loadUsers();
+      syncDistrictsAggregate();
     } catch (err) {
       showToast('Ошибка: ' + err.message, true);
     }
@@ -667,6 +705,7 @@ async function addToAll() {
     });
     await batch.commit();
     await loadUsers();
+    syncDistrictsAggregate();
     renderStats();
     showToast('Всем начислено +5');
   } catch (err) {
@@ -723,6 +762,7 @@ function addToDistrict() {
       });
       await batch.commit();
       await loadUsers();
+      syncDistrictsAggregate();
       renderStats();
       showToast('Команде «' + d + '» начислено +' + pts);
     } catch (err) {
@@ -742,6 +782,7 @@ async function resetAllScores() {
     });
     await batch.commit();
     await loadUsers();
+    syncDistrictsAggregate();
     renderStats();
     showToast('Все баллы сброшены');
   } catch (err) {
@@ -780,6 +821,23 @@ function districtStats() {
     .sort((a, b) => b.score - a.score);
 }
 
+/* Пересчёт агрегата «rating/districts» — единственный документ, который
+   участники читают для рейтинга округов (1 чтение вместо ~150). Вызывается
+   после каждой админ-операции, меняющей баллы; usersCache уже обновлён. */
+async function syncDistrictsAggregate() {
+  if (DEV_MODE) return;
+  if (!db) return;
+  const rows = districtStats();
+  try {
+    await db.doc('rating/districts').set({
+      list: rows,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    /* молча — следующий пересчёт или ручная кнопка всё поправит */
+  }
+}
+
 function renderDistrictStats() {
   const wrap = document.getElementById('stat-district');
   if (!wrap) return;
@@ -811,6 +869,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const defPoints = Number(document.getElementById('task-points').value);
     const type = document.getElementById('task-type').value;
     const limit = Number(document.getElementById('task-limit').value);
+    const district = document.getElementById('task-district').value;
     const day = document.getElementById('task-day').value;
     const withPhoto = document.getElementById('task-photo').checked;
     const withVideo = document.getElementById('task-video').checked;
@@ -820,24 +879,43 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Баллы ≥ 1: задай поле «Баллы» или «| N» в строке', true);
       return;
     }
-    rows.forEach((r) => createTask(r.text, r.points, { type: type, limit: limit, day: day, withPhoto: withPhoto, withVideo: withVideo }));
+    if (type === 'district' && !district) { showToast('Выбери округ команды', true); return; }
+    rows.forEach((r) => createTask(r.text, r.points, { type: type, limit: limit, day: day, district: district, withPhoto: withPhoto, withVideo: withVideo }));
     document.getElementById('task-text').value = '';
     document.getElementById('task-day').value = '';
   });
   const taskTypeEl = document.getElementById('task-type');
   const taskLimitWrap = document.getElementById('task-limit-wrap');
+  const taskDistrictWrap = document.getElementById('task-district-wrap');
   if (taskTypeEl && taskLimitWrap) {
     const toggleLimit = () => {
-      taskLimitWrap.style.display = taskTypeEl.value === 'repeat' ? 'block' : 'none';
+      const v = taskTypeEl.value;
+      taskLimitWrap.style.display = v === 'repeat' ? 'block' : 'none';
+      if (taskDistrictWrap) taskDistrictWrap.style.display = v === 'district' ? 'block' : 'none';
     };
     taskTypeEl.addEventListener('change', toggleLimit);
     toggleLimit();
+  }
+  const taskDistSel = document.getElementById('task-district');
+  if (taskDistSel && typeof DISTRICTS !== 'undefined') {
+    DISTRICTS.forEach((d) => {
+      const o = document.createElement('option');
+      o.value = d;
+      o.textContent = d;
+      taskDistSel.appendChild(o);
+    });
   }
   bindTaskFilter();
 
   document.getElementById('btn-add-all').addEventListener('click', addToAll);
   document.getElementById('btn-add-district').addEventListener('click', addToDistrict);
   document.getElementById('btn-reset-all').addEventListener('click', resetAllScores);
+  document.getElementById('btn-export-csv').addEventListener('click', exportUsersCSV);
+  document.getElementById('btn-clean-archive').addEventListener('click', clearArchivedSubmissions);
+  document.getElementById('btn-refresh-districts').addEventListener('click', () => {
+    loadUsers().then(() => syncDistrictsAggregate().then(() => showToast('Рейтинг округов обновлён')));
+  });
+  document.getElementById('btn-destroy-all').addEventListener('click', openDestroyAllWizard);
 
   document.getElementById('users-search').addEventListener('input', (e) => {
     userQuery = e.target.value;
@@ -883,8 +961,174 @@ async function toggleUserHide(uid) {
   try {
     await db.collection('users').doc(uid).update({ showInRating: newVal });
     await loadUsers();
+    syncDistrictsAggregate();
     renderStats();
   } catch(e) {
     showToast('Ошибка', true);
   }
+}
+
+/* ============================================================
+   ПОЛЕЗНЫЕ ДЕЙСТВИЯ
+   ============================================================ */
+
+/* Пакетная отправка удалений (Firestore: batch ≤ 500 операций) */
+async function batchDeleteRefs(refs) {
+  for (let i = 0; i < refs.length; i += 450) {
+    const b = db.batch();
+    refs.slice(i, i + 450).forEach((r) => b.delete(r));
+    await b.commit();
+  }
+}
+
+/* Экспорт участников в CSV (UTF-8 BOM, чтобы Excel понимал кириллицу).
+   Одна строка = участник; без приватных данных: только имя, VK ID, округ, баллы, видимость. */
+function exportUsersCSV() {
+  const esc = (s) => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+  const rows = [
+    ['Имя', 'VK ID', 'Профиль', 'Округ', 'Баллы', 'В рейтинге'].map(esc).join(';'),
+    ...usersCache.map((u) => [
+      u.name || '',
+      String(u.vkId || ''),
+      'https://vk.com/id' + (u.vkId || ''),
+      String(u.district || ''),
+      Number(u.score) || 0,
+      u.showInRating === false ? 'скрыт' : 'да',
+    ].map(esc).join(';')),
+  ];
+  const blob = new Blob(['\uFEFF' + rows.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'mediavolnapp_users_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+  showToast('CSV скачан (' + usersCache.length + ' уч.)');
+}
+
+/* Очистить архив заявок на модерацию: всё, что уже обработано (state ≠ pending),
+   вместе с чанками видео. Ожидание модератора остаётся нетронутым. */
+async function clearArchivedSubmissions() {
+  const ok = await confirmDialog('Удалить обработанные заявки на модерацию (архив)? Находящиеся на модерации не тронем.');
+  if (!ok) return;
+  try {
+    const snap = await db.collection('submissions').get();
+    const refs = [];
+    for (const d of snap.docs) {
+      const data = d.data() || {};
+      if (data.state && data.state !== 'pending') {
+        const cs = await db.collection('submissions').doc(d.id).collection('chunks').get();
+        cs.docs.forEach((c) => refs.push(c.ref));
+        refs.push(d.ref);
+      }
+    }
+    await batchDeleteRefs(refs);
+    showToast('Архив очищен: удалено ' + refs.length + ' документов');
+  } catch (err) {
+    showToast('Ошибка: ' + err.message, true);
+  }
+}
+
+/* ============================================================
+   ОПАСНАЯ ЗОНА — сброс АБСОЛЮТНО всех данных слёта
+   Удаляются: schedule/* (пресеты + current), tasks/* (+ tasks/current),
+   users/*, submissions/* и подколлекции chunks.
+   config/admins НЕ удаляется — иначе текущий админ потеряет доступ.
+   Подтверждение: ровно 10 вопросов подряд. Необратимо.
+   ============================================================ */
+const DESTROY_STEPS = [
+  'Вы уверены, что хотите сбросить АБСОЛЮТНО все данные слёта?',
+  'Вы точно уверены? Обратной дороги не будет.',
+  'Расписание и все пресеты будут удалены безвозвратно.',
+  'Все задания и выдача участникам — тоже удалятся.',
+  'Все участники, их баллы и прогресс сотрутся начисто.',
+  'Все фото и видео-заявки на модерацию пропадут.',
+  'Участники начнут с чистого листа и снова выберут округа.',
+  'Это самая опасная кнопка во всём приложении.',
+  'Осталось два шага. Уверены на 100%?',
+  'Последний раз спрашиваю: вы ТОЧНО уверены?'
+];
+
+function openDestroyAllWizard() {
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.id = 'destroy-wizard';
+
+  const progress = DESTROY_STEPS.map(() => '<div class="dz-dot"></div>').join('');
+  back.innerHTML =
+    '<div class="modal">' +
+    '<div class="dz-head"><i data-feather="alert-triangle"></i><div class="grow"><b>Сброс всех данных</b></div></div>' +
+    '<p class="dz-q" id="dz-q">' + DESTROY_STEPS[0] + '</p>' +
+    '<div class="dz-list">' +
+    '<span>Расписание и пресеты</span>' +
+    '<span>Задания и tasks/current</span>' +
+    '<span>Участники, баллы, выполнение</span>' +
+    '<span>Фото/видео-заявки на модерацию</span>' +
+    '</div>' +
+    '<div class="dz-progress" id="dz-progress">' + progress + '</div>' +
+    '<p class="dz-note">Список организаторов (config/admins) сохранён — иначе вы потеряете доступ к панели.</p>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
+    '<button class="btn btn-ghost" id="dz-cancel" type="button">Нет, хватит</button>' +
+    '<button class="btn btn-block" id="dz-ok" type="button">Дальше (1/10)</button>' +
+    '</div></div>';
+  document.body.appendChild(back);
+
+  let step = 0;
+  const q = back.querySelector('#dz-q');
+  const dots = back.querySelector('#dz-progress').children;
+  const okBtn = back.querySelector('#dz-ok');
+
+  back.querySelector('#dz-cancel').addEventListener('click', () => back.remove());
+
+  okBtn.addEventListener('click', async () => {
+    if (step < DESTROY_STEPS.length) {
+      step++;
+      q.textContent = 'Вы' + (step < DESTROY_STEPS.length
+        ? '' : ' прошли все проверки. Последний шаг — всё будет удалено безвозвратно.');
+      if (step < DESTROY_STEPS.length) q.textContent = DESTROY_STEPS[step];
+      for (let i = 0; i < dots.length; i++) dots[i].classList.toggle('on', i < step);
+      if (step < DESTROY_STEPS.length) {
+        okBtn.textContent = 'Дальше (' + (step + 1) + '/' + DESTROY_STEPS.length + ')';
+      } else {
+        okBtn.textContent = 'СБРОСИТЬ ВСЕ ДАННЫЕ';
+        okBtn.classList.add('btn-danger');
+        okBtn.classList.add('dz-big');
+      }
+      return;
+    }
+    const risk = await confirmDialog('Финальное подтверждение: удалить ВСЕ данные слёта без возможности восстановления?');
+    if (!risk) return;
+    okBtn.disabled = true;
+    okBtn.textContent = 'Удаляю…';
+    try {
+      await destroyAllData();
+      back.remove();
+      showToast('Все данные слёта сброшены');
+      setTimeout(() => location.reload(), 1500);
+    } catch (err) {
+      okBtn.disabled = false;
+      okBtn.textContent = 'СБРОСИТЬ ВСЕ ДАННЫЕ';
+      showToast('Не удалось сбросить: ' + err.message, true);
+    }
+  });
+}
+
+async function destroyAllData() {
+  const deleteCollection = async (name, sub) => {
+    const snap = await db.collection(name).get();
+    if (sub && name === 'submissions') {
+      const extra = [];
+      for (const d of snap.docs) {
+        const cs = await db.collection(name + '/' + d.id + '/' + sub).get();
+        cs.docs.forEach((cDoc) => extra.push(cDoc.ref));
+      }
+      await batchDeleteRefs(extra);
+    }
+    await batchDeleteRefs(snap.docs.map((d) => d.ref));
+  };
+  await deleteCollection('schedule');
+  await deleteCollection('tasks');
+  await deleteCollection('users');
+  await deleteCollection('submissions', 'chunks');
+  await db.doc('rating/districts').delete().catch(() => {});
 }

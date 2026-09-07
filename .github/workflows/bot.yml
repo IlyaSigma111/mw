@@ -2,7 +2,7 @@ name: mw-bot
 
 on:
   schedule:
-    - cron: '*/2 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -36,6 +36,6 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/sa.json
           VK_TOKEN: ${{ secrets.VK_TOKEN }}
           VK_GROUP_ID: ${{ secrets.VK_GROUP_ID }}
-          VK_CHAT_ID: ${{ secrets.VK_CHAT_ID }}
+          VK_PEERS: ${{ secrets.VK_CHAT_ID }}
         run: node bot.js
         working-directory: bot

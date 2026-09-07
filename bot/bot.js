@@ -143,11 +143,32 @@ async function loadVideoBuffer(db, snap, sub) {
     const parts = [];
     snaps.forEach((d) => {
       const data = d.data() || {};
+      if (data.kind === 'photo') return;
       parts[Number(data.n)] = data.b64 || '';
     });
     return joinChunks(parts, Number(sub.videoChunks) || parts.length);
   }
   return null;
+}
+
+/* Собрать несколько фото заявки: единичное photoB64 лежит в документе,
+   множественные — чанки kind:'photo' в подколлекции (лимит 1МБ документа). */
+async function loadPhotoBuffers(db, snap, sub) {
+  if (Array.isArray(sub.photoB64s) && sub.photoB64s.length) {
+    return sub.photoB64s.map((b64) => Buffer.from(b64, 'base64'));
+  }
+  if (sub.photoB64) return [Buffer.from(sub.photoB64, 'base64')];
+  if (sub.photoCount) {
+    const snaps = await db.collection('submissions').doc(snap.id)
+      .collection('chunks').where('kind', '==', 'photo').get();
+    const byN = [];
+    snaps.forEach((d) => {
+      const data = d.data() || {};
+      byN[Number(data.n)] = data.b64 || '';
+    });
+    return byN.filter(Boolean).map((b64) => Buffer.from(b64, 'base64'));
+  }
+  return [];
 }
 
 async function sendToPeers(env, db, snap, peers, sub, attachment) {
@@ -181,22 +202,13 @@ async function sendSubmission(env, db, bucket, snap, peers) {
     return;
   }
 
-  const bufs = [];
-  const filenames = [];
-  if (Array.isArray(sub.photoB64s) && sub.photoB64s.length) {
-    sub.photoB64s.forEach((b64) => bufs.push(Buffer.from(b64, 'base64')));
-  } else if (sub.photoB64) {
-    bufs.push(Buffer.from(sub.photoB64, 'base64'));
-  } else if (sub.photoPath) {
-    [bufs[0]] = await bucket.file(sub.photoPath).download();
-    filenames.push(sub.photoPath.split('/').pop() || 'photo.jpg');
-  }
+  const bufs = await loadPhotoBuffers(db, snap, sub);
   if (!bufs.length) {
     await snap.ref.update({ sent: true, skipped: true, sentAt: FieldValue.serverTimestamp() });
     console.log(`skip ${snap.id} (no media)`);
     return;
   }
-  const attachment = await uploadPhotosToPeer(env.VK_TOKEN, env.VK_GROUP_ID, peers[0], bufs, filenames);
+  const attachment = await uploadPhotosToPeer(env.VK_TOKEN, env.VK_GROUP_ID, peers[0], bufs, []);
   await sendToPeers(env, db, snap, peers, sub, attachment);
 }
 
@@ -266,7 +278,7 @@ async function scanAndDecide(env, db, submissions, peers) {
 }
 
 export async function runBot(env) {
-  const { VK_TOKEN, VK_GROUP_ID, SA_PATH, VK_PEERS } = env;
+  const { VK_TOKEN, VK_GROUP_ID, SA_PATH, VK_PEERS, VK_CHAT_ID } = env;
   if (!VK_TOKEN || !VK_GROUP_ID || !SA_PATH) {
     throw new Error('missing env: need VK_TOKEN, VK_GROUP_ID, SA_PATH');
   }
@@ -277,7 +289,7 @@ export async function runBot(env) {
 
   const cfgRef = db.doc('config/peers');
   let peers;
-  const configured = VK_PEERS ? String(VK_PEERS).split(',').filter(Boolean) : null;
+  const configured = (VK_PEERS || env.VK_CHAT_ID) ? String(VK_PEERS || env.VK_CHAT_ID).split(',').filter(Boolean) : null;
   const cfgSnap = await cfgRef.get();
   if (configured && configured.length) {
     peers = configured.map(Number).filter((n) => Number.isFinite(n));
@@ -293,7 +305,7 @@ export async function runBot(env) {
   }
   console.log(`peers: ${peers.join(', ')}`);
 
-  const pending = await db.collection('submissions').where('sent', '==', false).limit(5).get();
+  const pending = await db.collection('submissions').where('sent', '==', false).limit(10).get();
   for (const snap of pending.docs) {
     try {
       await sendSubmission(env, db, bucket, snap, peers);
@@ -302,7 +314,7 @@ export async function runBot(env) {
     }
   }
 
-  const undecided = await db.collection('submissions').where('sent', '==', true).where('state', '==', 'pending').limit(20).get();
+  const undecided = await db.collection('submissions').where('sent', '==', true).where('state', '==', 'pending').limit(10).get();
   await scanAndDecide(env, db, undecided.docs, peers);
 }
 
@@ -311,6 +323,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     VK_TOKEN: process.env.VK_TOKEN,
     VK_GROUP_ID: process.env.VK_GROUP_ID,
     VK_PEERS: process.env.VK_PEERS,
+    VK_CHAT_ID: process.env.VK_CHAT_ID,
     SA_PATH: process.env.GOOGLE_APPLICATION_CREDENTIALS,
   }).then(
     () => process.exit(0),

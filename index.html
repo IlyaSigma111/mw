@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#12121A">
+  <meta name="theme-color" content="#0D0A1A">
   <title>МедиаволнApp</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=56">
+  <link rel="stylesheet" href="css/styles.css?v=62">
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -68,10 +68,11 @@
         <h2>Рейтинг</h2>
         <button id="rating-refresh" class="link-btn" type="button" style="margin-left:auto" title="Обновить рейтинг">Обновить</button>
       </div>
-      <div class="sec-sub">Топ-10 · обновляется по кнопке</div>
+      <div class="sec-sub">Топ-10 · данные обновлены <span id="rating-fresh">–:–</span></div>
       <div id="rating">
         <div class="skel h18"></div><div class="skel h18"></div><div class="skel h18"></div>
       </div>
+      <div id="my-rating-block"></div>
       <div id="district-rating"></div>
     </section>
 
@@ -100,7 +101,7 @@
           <div class="sw"><i></i></div>
         </div>
         <div class="set-row" id="set-anim-row" style="display:none" role="button" tabindex="0">
-          <div class="grow"><b>Анимация карточки (Gemini)</b><small>Красивое переливание вашего имени в рейтинге</small></div>
+          <div class="grow"><b>Анимация карточки</b><small>свечение вашего имени в таблице рейтинга</small></div>
           <div class="sw"><i></i></div>
         </div>
       </div>
@@ -132,7 +133,7 @@
   <script src="js/districts.js?v=56"></script>
   <script src="js/schedule.js?v=56"></script>
   <script src="js/vk.js?v=56"></script>
-  <script src="js/app.js?v=56"></script>
+  <script src="js/app.js?v=64"></script>
   <script>
     /* Вход в админку по deep-link: ...vk.com/app54716297#admin */
     (function () {
