@@ -241,6 +241,8 @@ body {
 .rate-mine .rate-avatar { width: 38px; height: 38px; }
 .rate-mine b { display: block; font-size: 15px; }
 .rate-mine small { display: block; color: var(--text-dim); font-size: 13px; margin-top: 2px; line-height: 1.4; }
+.day-summary-head { display: block; text-align: center; margin-top: 16px; font-size: 17px; font-weight: 800; color: var(--text-main); letter-spacing: -0.3px; }
+#day-summary .rate-row { margin-bottom: 6px; }
 
 /* --- Задания --- */
 .task { display: flex; align-items: center; gap: 14px; padding: 16px; }

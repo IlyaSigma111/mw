@@ -23,10 +23,13 @@ export function buildCaption(sub) {
   const label = sub.mediaType === 'video' ? 'Видео'
     : sub.mediaType === 'mixed' ? 'Фото+видео'
     : 'Фото';
+  const teamLine = sub.district ? `\nКоманда · округ «${sub.district}»` : '';
   const lines = [
-    `${label} с задания №${sub.taskId} · «${sub.taskText || ''}» · +${sub.points ?? '?'} б`,
-    `Участник: ${sub.name || sub.vkId || sub.uid}`,
-    'Ответьте реплаем на это сообщение: «+» засчитать или «−» отклонить',
+    `${label} с задания №${sub.taskId} · «${sub.taskText || ''}»` + (sub.noAward ? '' : ` · +${sub.points ?? '?'} б`),
+    `Участник: ${sub.name || sub.vkId || sub.uid}${teamLine}`,
+    sub.noAward
+      ? 'Ответьте реплаем: «+» зачесть участие или «−» отклонить (баллы команде начислит организатор)'
+      : 'Ответьте реплаем на это сообщение: «+» засчитать или «−» отклонить',
   ];
   return lines.join('\n');
 }
@@ -237,12 +240,15 @@ async function scanAndDecide(env, db, submissions, peers) {
         decidedAt: FieldValue.serverTimestamp(),
       });
       if (decision === 'approve' && sub.uid) {
-        await db.doc(`users/${sub.uid}`).set({
-          score: FieldValue.increment(sub.points || 0),
+        const apply = {
           [`done.${sub.taskId}`]: true,
           updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-        console.log(`awarded ${sub.points} to ${sub.uid}`);
+        };
+        // Командное с медиа (noAward): баллы всей команде начислит организатор
+        // через админку — бот лично участнику не начисляет.
+        if (!sub.noAward) apply.score = FieldValue.increment(sub.points || 0);
+        await db.doc(`users/${sub.uid}`).set(apply, { merge: true });
+        console.log(`awarded ${sub.noAward ? '(team) ' : ''}${sub.points} to ${sub.uid}`);
       }
       const statusText = buildStatusText(sub, decision);
       for (const other of peers) {
@@ -261,7 +267,9 @@ async function scanAndDecide(env, db, submissions, peers) {
         }
       }
       const ack = decision === 'approve'
-        ? `✅ Засчитано! Участнику «${sub.name || sub.uid}» начислено +${sub.points} б. Спасибо за помощь!`
+        ? (sub.noAward
+            ? `✅ Принято! Участие «${sub.name || sub.uid}» засчитано. Баллы команде начислит организатор.`
+            : `✅ Засчитано! Участнику «${sub.name || sub.uid}» начислено +${sub.points} б. Спасибо за помощь!`)
         : `❌ Отклонено. Участнику «${sub.name || sub.uid}» баллы не начислены. Спасибо за проверку!`;
       try {
         await vkApi(env.VK_TOKEN, 'messages.send', {

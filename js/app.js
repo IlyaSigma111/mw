@@ -704,7 +704,7 @@ function renderTasks(list) {
     const isMedia = !!(t.withPhoto || t.withVideo);
     const mediaIcon = isMedia ? '<i data-feather="' + (t.withVideo ? 'video' : 'camera') + '"></i>' : '';
     const mediaLabel = t.withPhoto && t.withVideo ? 'Прикрепить файлы' : (t.withVideo ? 'Прикрепить видео' : 'Прикрепить фото');
-    const btnLabel = isDistrictTask ? (cnt > 0 ? 'Отмечено ✓' : 'Отметить участие')
+    const btnLabel = isDistrictTask ? (cnt > 0 ? 'Отмечено ✓' : (isMedia ? mediaLabel : 'Отметить участие'))
       : (isMedia ? (cnt > 0 ? 'Ещё раз' : mediaLabel) : (cnt > 0 ? 'Ещё раз' : 'Выполнить'));
     return (
       '<div class="card task rise" data-id="' + t.id + '">' +
@@ -725,7 +725,7 @@ function renderTasks(list) {
       const task = list.find((t) => t.id === id);
       btn.disabled = true;
       try {
-        if (task.type === 'district') {
+        if (task.type === 'district' && !(task.withPhoto || task.withVideo)) {
           await signDistrictTask(task);
         } else if (task.withPhoto || task.withVideo) {
           if (mediaSubmitting) return;
@@ -932,6 +932,12 @@ async function submitTaskMedia(task, files) {
       state: 'pending',
       ts: firebase.firestore.FieldValue.serverTimestamp(),
     };
+    // Командное с медиа: заявка = доказательство участия. Баллы ВСЕЙ команде
+    // начислит организатор (noAward — бот не зачисляет их лично участнику).
+    if (task.type === 'district') {
+      doc.noAward = true;
+      doc.district = myDistrict || '';
+    }
     // Одно фото живёт в документе, как раньше (бюджетный случай).
     // Несколько фото — в подколлекции chunks (kind:'photo'), чтобы не пробить
     // лимит Firestore 1МБ на документ; их собирает и шлёт бот.
@@ -957,9 +963,29 @@ async function submitTaskMedia(task, files) {
     const photoBatch = photoB64s.length > 1 ? writeChunks(photoB64s, 'photo', 'p') : null;
     if (videoBatch) await videoBatch;
     if (photoBatch) await photoBatch;
-    const doneMsg = mediaType === 'video' ? 'Видео ушло на модерацию!'
+
+    // «Накопительное с медиа» (повторяемое): каждая успешная заявка = +1 к
+    // прогрессу (до лимита N). «Командное с медиа»: заявка = отметка участия.
+    // Баллы — по решению модератора (bot.js), не мгновенно.
+    if (task.type === 'repeat' || task.type === 'district') {
+      doneCache[task.id] = task.type === 'repeat' ? taskCount(task) + 1 : 1;
+      try { localStorage.setItem(SELF_DOC_CACHE, JSON.stringify(doneCache)); } catch (e) {}
+      if (!DEV_MODE) {
+        db.collection('users').doc(myUid).update({
+          ['done.' + task.id]: firebase.firestore.FieldValue.increment(1),
+        }).catch(() => {});
+      }
+      renderTasks(lastTasks);
+    }
+
+    let doneMsg = mediaType === 'video' ? 'Видео ушло на модерацию!'
       : mediaType === 'mixed' ? 'Фото и видео ушли на модерацию!'
       : 'Фото ушло на модерацию!';
+    if (task.type === 'district') {
+      doneMsg += ' Участие отмечено — баллы команде начислит организатор.';
+    } else if (task.type === 'repeat') {
+      doneMsg += ' Заявка учтена (' + taskCount(task) + '/' + taskLimit(task) + ')';
+    }
     showToast(doneMsg);
   } catch (err) {
     showToast('Не удалось отправить: ' + err.message, true);
@@ -1164,6 +1190,38 @@ function renderMyRatingBlock() {
   wrap.innerHTML = '<div class="rate-mine">' + avatarInner + '<div class="grow">' + body + '</div></div>';
 }
 
+/* «Итоги дня» — вечерний срез рейтинга одним тапом. Ничего дополнительно не
+   читает: использует уже загруженные топ-10 и агрегат округов (кэш 10 мин).
+   Повторный тап обновляет время среза. */
+function renderDaySummary() {
+  const wrap = document.getElementById('day-summary');
+  if (!wrap) return;
+  const medals = ['🥇', '🥈', '🥉'];
+  const top = ratingTop || [];
+  const dist = districtRatingCached() || [];
+  if (!top.length && !dist.length) { wrap.innerHTML = ''; return; }
+  const topRows = top.map((u, i) =>
+    '<div class="rate-row">' +
+    '<div class="rate-rank">' + (medals[i] || (i + 1)) + '</div>' +
+    '<div class="rate-name"><span class="rate-name-text">' + escapeHtml(u.name || 'Без имени') + '</span></div>' +
+    '<div class="rate-pts">' + (u.score || 0) + '</div>' +
+    '</div>'
+  ).join('');
+  const distRows = dist.map((r, i) =>
+    '<div class="rate-row">' +
+    '<div class="rate-rank">' + (i + 1) + '</div>' +
+    '<div class="rate-name"><span class="rate-name-text">' + escapeHtml(r.district) + '</span></div>' +
+    '<div class="rate-pts">' + (r.score || 0) + '</div>' +
+    '</div>'
+  ).join('');
+  const now = new Date();
+  const time = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  wrap.innerHTML =
+    '<div class="sec-sub day-summary-head">🏁 Итоги дня · срез на ' + time + '</div>' +
+    (topRows ? '<div class="sec-sub" style="margin:16px 0 8px">Участники · топ-10</div>' + topRows : '') +
+    (distRows ? '<div class="sec-sub" style="margin:16px 0 8px">Рейтинг округов</div>' + distRows : '');
+}
+
 /* ---------- Запуск ---------- */
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sched-refresh').addEventListener('click', () => {
@@ -1178,6 +1236,15 @@ document.addEventListener('DOMContentLoaded', () => {
       loadRating();
       loadRatingDistricts(true);
       renderMyRatingBlock();
+    });
+  }
+  const daySummaryBtn = document.getElementById('day-summary');
+  if (daySummaryBtn) {
+    daySummaryBtn.addEventListener('click', async () => {
+      vkFeedback('click');
+      await loadRating();
+      await loadRatingDistricts();
+      renderDaySummary();
     });
   }
   const adminBtn = document.getElementById('btn-admin-open');
